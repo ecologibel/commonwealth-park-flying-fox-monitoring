@@ -35,13 +35,6 @@ pacman::p_load(plyr, data.table, dplyr, ggmap, ggplot2, janitor,
                lubridate, naniar, readxl, reshape2, tidyr, tidyverse)
 ```
 
-We also set the working directly to where this R markdown is saved using the `rstudioapi` package.
-
-```{r}
-# Set the working directory to where this markdown is saved
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-```
-
 # **Species and demographics**
 
 Line graph for 2022 with month on the x-axis and and two y-axes (see below), showing the following as separate lines (Fig 3a):
@@ -318,9 +311,10 @@ surveys_trees <- left_join(surveys, trees, by="tree") |>
 
  4. Get base layer from Google Maps
 
+You'll need to sign up for a Google API for this step.
+
 ```{r, results='hide', warning=FALSE, message=FALSE}
-# Use Google API to fetch a base map
-#ggmap::register_google(key="AIzaSyD3oI7s-51ptrEvn24IN4okN_McvWhC7x4", write=TRUE)
+# Use a Google API to fetch a base map
 map <- get_map(location=c(lon=149.131749, lat=-35.289492), 
                zoom=19, source="google", 
                maptype="roadmap", crop=FALSE)
