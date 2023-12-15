@@ -1,7 +1,7 @@
 ---
-title: "ABS Commonwealth Park flying-fox mapping"
+title: "ABS Commonwealth Park flying-fox population analyses and mapping"
 author: "Belinda Wilson and Shoshana Rapley"
-date: "11 December 2022"
+date: "December 15, 2023"
 output:
   html_document:
     toc: true
@@ -21,9 +21,25 @@ knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = e
 knitr::opts_chunk$set(echo=TRUE, message=FALSE, warning=FALSE)
 ```
 
-# **Setup**
+# Setup
 
-First, we installed the [pacman Package Management Tool](https://cran.r-project.org/web/packages/pacman/index.html), which allows us to install and load subsequent packages in a condensed and efficient way.
+First to ensure reproducibility of this project between operating systems, we have used [renv](https://rstudio.github.io/renv/articles/renv.html) to save the packages used in these analyses.
+
+```{r, eval=FALSE}
+# Install renv package
+#install.packages("renv")
+
+# Initialise renv (only relevant to project creator)
+#renv::init()
+
+# Take a 'snapshot' of the current environment
+#renv::snapshot()
+
+# Load renv from pre-existing snapshot (in project folder)
+renv::restore()
+```
+
+We also use the [pacman Package Management Tool](https://cran.r-project.org/web/packages/pacman/index.html), which allows us to install and load subsequent packages in a condensed and efficient way.
 
 ```{r, eval=FALSE}
 #install.packages("pacman")
@@ -31,17 +47,18 @@ First, we installed the [pacman Package Management Tool](https://cran.r-project.
 
 ```{r, results='hide', warning=FALSE, message=FALSE}
 # Install and load required packages
-pacman::p_load(plyr, data.table, dplyr, ggmap, ggplot2, janitor, 
-               lubridate, naniar, readxl, reshape2, tidyr, tidyverse)
+pacman::p_load(plyr, data.table, dplyr, ggmap, 
+               ggplot2, janitor, lubridate, naniar, 
+               readxl, renv, reshape2, tidyr, tidyverse)
 ```
 
-# **Species and demographics**
+# Species and demographics
 
-Line graph for 2022 with month on the x-axis and and two y-axes (see below), showing the following as separate lines (Fig 3a):
+Line graph with month on the x-axis and and two y-axes (see below), showing the following as separate lines (Fig 3a):
 
-  1. Number of GHFFs over time (primary axis ranging 0-10,000)
-  2. Number of LRFFs over time (primary axis ranging 0-10,000)
-  3. Number of trees occupied (secondary axis ranging 0-160)
+  1. Number of GHFFs over time (primary axis ranging 0–10,000)
+  2. Number of LRFFs over time (primary axis ranging 0–10,000)
+  3. Number of trees occupied (secondary axis ranging 0–160)
 
 ```{r, results='hide', warning=FALSE, message=FALSE}
 # Assign raw data filename to an object
@@ -52,7 +69,7 @@ data <- read_excel(raw_data, sheet="monitoring") |>
   filter(include=="Yes", location=="Commonwealth Park")|>
   mutate(lrff=as.character(lrff)) |>
   pivot_longer(cols=9:10, names_to="species", values_to="count") |>
-  filter(count!=0) |>
+  filter(count!=0) |> 
   mutate(count=if_else(count=="800-1000", "900", count)) |>
   mutate(count=if_else(count=="200-250", "225", count)) |> #replaces ranges with mean
   mutate(count=as.numeric(count),
@@ -60,10 +77,10 @@ data <- read_excel(raw_data, sheet="monitoring") |>
          date=as.Date(date, format=c("%d/%m/%Y"))) |>
   mutate(year=year(date))
 
-data_22 <- subset(data, date > "2021-12-01" & date < "2022-11-30")
+data23 <- subset(data, date > "2022-12-01" & date < "2023-11-30")
 
-fig3a <- ggplot(data_22) +
-  geom_line(mapping=aes(date, count, col=species), size=0.6) +
+fig3a <- ggplot(data23) +
+  geom_line(mapping=aes(date, count, col=species), linewidth=0.6) +
   geom_line(mapping=aes(date, trees_occupied*50, 
                 col='chartreuse4'), size=0.6) +
   scale_color_manual(name='', 
@@ -78,34 +95,41 @@ fig3a <- ggplot(data_22) +
   theme_minimal() +
   theme(panel.grid.major=element_blank(), 
         panel.grid.minor=element_blank(), 
+        panel.border=element_blank(),
         legend.text=element_text(size=8),
-        legend.position="bottom") +
+        legend.position="bottom", 
+        legend.title=element_blank(),
+        axis.text.y=element_text(angle=0, 
+                    vjust=0.5, colour="black"),
+        axis.text.x=element_text(angle=0, 
+                    vjust=1, hjust=0, colour="black"),
+        plot.margin=margin(0.5, 0, 0, 0, "cm")) +
   labs(x="Month", y="Flying-foxes recorded")
 print(fig3a)
 ```
 
 ```{r, include=FALSE}
-jpeg(file="figures/Flying-fox species and demographics 2022 (Figure 3a).jpeg", 
+jpeg(file="figures/Flying-fox species and demographics 2023 (Figure 3a).jpeg", 
      width=6000, height=2500, units="px", res=800)
 print(fig3a)
 dev.off()
 ```
 
-# **Mean abundance**
+# Mean abundance
 
-Bar graph for 2022 with month on the x-axis and number of flying-foxes on the y-axis, showing the following as separate bars with standard error bars (Fig 3b): 
+Bar graph with month on the x-axis and number of flying-foxes on the y-axis, showing the following as separate bars with standard error bars (Fig 3b): 
 
-  1. Mean number of flying-foxes recorded (primary axis ranging 0-6000)
-  2. Mean trees occupied (secondary axis ranging 0-140)
-  3. Mean ratio of flying-foxes to trees (secondary axis ranging 0-140)
+  1. Mean number of flying-foxes recorded (primary axis ranging 0–6000)
+  2. Mean trees occupied (secondary axis ranging 0–140)
+  3. Mean ratio of flying-foxes to trees (secondary axis ranging 0–140)
 
 ```{r}
-data22 <- read_excel(raw_data, sheet="monitoring") |> 
+data23 <- read_excel(raw_data, sheet="monitoring") |> 
   clean_names() |> 
   filter(include=="Yes", location=="Commonwealth Park", 
          survey!="Estimate") |> #remove estimates 
   mutate(year=year(date)) |> 
-  subset(date > "2021-12-01" & date < "2022-11-30") |> 
+  subset(date > "2021-12-01" & date < "2023-11-30") |> 
   mutate(month=lubridate::month(date, label=TRUE, abbr=TRUE), 
          ghff=as.numeric(ghff), 
          lrff=as.numeric(lrff), 
@@ -117,22 +141,22 @@ data22 <- read_excel(raw_data, sheet="monitoring") |>
 #and ratio on a secondary axis, we multipled these 
 #values by 40 - we undo this at the plotting stage
 
-data22_means <- data22 |> 
+data23_means <- data23 |> 
   group_by(month) |> 
   summarise(count_mean=mean(bats_total),
             ratio_mean=40*mean(ratio),
             trees_mean=40*mean(trees_occupied)) |>
   pivot_longer(2:4, names_to="type", values_to="mean")
 
-data22_se <- data22 |> 
+data23_se <- data23 |> 
   group_by(month) |> 
   summarise(count_se=sd(bats_total)/sqrt(length(bats_total)),
             ratio_se=40*sd(ratio)/sqrt(length(ratio)),
             trees_se=40*sd(trees_occupied)/sqrt(length(trees_occupied))) |>
   pivot_longer(2:4, names_to="type", values_to="se")
 
-data22_stats <- cbind(data22_means, data22_se)
-colnames(data22_stats) <- make.unique(names(data22_stats))
+data23_stats <- cbind(data23_means, data23_se)
+colnames(data23_stats) <- make.unique(names(data23_stats))
 
 june <- data.frame("Jun", "count_mean", NA, "Jun", "count_se", NA)
 july <- data.frame("Jul", "count_mean", NA, "Jul", "count_se", NA)
@@ -144,7 +168,7 @@ names(july) <- c("month", "type", "mean", "month.1", "type.1", "se")
 names(august) <- c("month", "type", "mean", "month.1", "type.1", "se")
 names(september) <- c("month", "type", "mean", "month.1", "type.1", "se")
 
-data22_stats <- rbind(data22_stats, june, july, august, september) |>
+data23_stats <- rbind(data23_stats, june, july, august, september) |>
   mutate(type=factor(type,levels=c("count_mean", "trees_mean", 
                                    "ratio_mean", "count_se", 
                                    "trees_se", "ratio_se")),
@@ -152,9 +176,9 @@ data22_stats <- rbind(data22_stats, june, july, august, september) |>
                                       "Apr", "May", "Jun", "Jul", 
                                       "Aug", "Sep", "Oct", "Nov")))
 
-#data22_stats$true <- data22_stats$mean/40 #true values for report
+data23_stats$true <- data23_stats$mean/40 #true values for report
 
-fig3b <- ggplot(data22_stats, aes(x=month, y=mean, fill=type)) +
+fig3b <- ggplot(data23_stats, aes(x=month, y=mean, fill=type)) +
   geom_bar(stat="identity", position="dodge") + 
   geom_errorbar(mapping=aes(x=month, ymin=mean-se, 
                             ymax=mean+se, col=type), 
@@ -162,8 +186,15 @@ fig3b <- ggplot(data22_stats, aes(x=month, y=mean, fill=type)) +
   theme_minimal() +
   theme(panel.grid.major=element_blank(), 
         panel.grid.minor=element_blank(), 
+        panel.border=element_blank(),
         legend.text=element_text(size=8),
-        legend.position="bottom") +
+        legend.position="bottom", 
+        legend.title=element_blank(),
+        axis.text.y=element_text(angle=0, 
+                    vjust=0.5, colour="black"),
+        axis.text.x=element_text(angle=0, 
+                    vjust=1, hjust=0, colour="black"),
+        plot.margin=margin(0.5, 0, 0, 0, "cm")) +
   scale_fill_manual(name='', values=c("#1F2148","#CACBE8","#7B7FC7"),
                     labels=c("Mean flying-fox abundance", 
                              "Mean trees occupied", 
@@ -177,15 +208,15 @@ print(fig3b)
 ```
 
 ```{r, include=FALSE}
-jpeg(file="figures/Mean flying-fox abundance 2022 (Figure 3b).jpeg", 
+jpeg(file="figures/Mean flying-fox abundance 2023 (Figure 3b).jpeg", 
      width=6000, height=2500, units="px", res=800)
 print(fig3b)
 dev.off()
 ```
 
-# **Peak numbers**
+# Peak numbers
 
-Stacked bar graph for 2012-2022 with year on the x-axis and number of flying-foxes recorded on the y-axis (Fig 4), showing:
+Stacked bar graph for 2012-2023 with year on the x-axis and number of flying-foxes recorded on the y-axis (Fig 4), showing:
 
   1. Maximum number of flying-foxes recorded for each year
   2. Mean number of flying-foxes recorded for each year
@@ -200,7 +231,9 @@ data <- read_excel(raw_data, sheet="monitoring") |>
   mutate(ghff=as.numeric(ghff),
          lrff=as.numeric(lrff),
          year=year(date)) |> 
-  mutate(bats_total=ghff + lrff)
+  mutate(bats_total=ghff + lrff) |>
+  # Remove years prior to year 2000
+  filter(year > 2000)
 
 peak <- data |> 
   group_by(year) |>
@@ -215,12 +248,19 @@ fig4 <- ggplot(peak, (aes(year, stat, fill=type))) +
   theme_minimal() +
   theme(panel.grid.major=element_blank(), 
         panel.grid.minor=element_blank(), 
+        panel.border=element_blank(),
         legend.text=element_text(size=8),
-        legend.position="bottom") +
+        legend.position="bottom", 
+        legend.title=element_blank(),
+        axis.text.y=element_text(angle=0, 
+                    vjust=0.5, colour="black"),
+        axis.text.x=element_text(angle=0, 
+                    vjust=1, hjust=0, colour="black"),
+        plot.margin=margin(0.5, 0, 0, 0, "cm")) +
   scale_fill_manual(name="", values=c("#1F2148","#CACBE8"),
                     labels=c("Peak", "Mean")) +
   scale_y_continuous(breaks=seq(0, 10000, 2000)) +
-  scale_x_continuous(breaks=seq(2011, 2022, 1)) +
+  scale_x_continuous(breaks=seq(2011, 2023, 1)) +
   labs(x="Year", y="Flying-fox abundance") +
   theme(plot.title=element_text(size=15, face="bold", 
                                 margin=margin(10, 0, 10, 0)))
@@ -228,57 +268,64 @@ print(fig4)
 ```
 
 ```{r, include=FALSE}
-jpeg(file="figures/Peak flying-fox abundance 2012–2022 (Figure 4).jpeg", 
+jpeg(file="figures/Peak flying-fox abundance 2011–2023 (Figure 4).jpeg", 
      width=6000, height=2500, units="px", res=800)
 print(fig4)
 dev.off()
 ```
 
-# **Survey effort and weather**
+# Survey effort and weather
 
-Line graph for 2012-2022 with date on the x-axis and number of flying-foxes recorded on the y-axis, showing the number of flying-foxes recorded for every survey conducted in each year, with temperature in the background (Fig 5).
+Line graph for 2012-2023 with date on the x-axis and number of flying-foxes recorded on the y-axis, showing the number of flying-foxes recorded for every survey conducted in each year, with temperature in the background (Fig 5).
 
 The weather data were acquired from the [Australian Bureau of Meteorology weather station 70351](http://www.bom.gov.au/climate/data/index.shtml?bookmark=136).
 
 ```{r}
 weather <- read_excel(raw_data, sheet="weather") |>
   clean_names() |> 
-  filter(year>=2011) |>
+  filter(year > 2011) |>
   mutate(date=paste(year, month, day, sep="/")) |>
   mutate(date=as.Date(date, format=c("%Y/%m/%d")))
 
-weather2 <-pivot_longer(weather, 5:6, 
-                        names_to="type", 
-                        values_to="temperature")
+weather2 <- pivot_longer(weather, 5:6, 
+                         names_to="type", 
+                         values_to="temperature")
 
 fig5 <- ggplot() +
   geom_ribbon(data=weather, aes(as.Date(date), 
-                                ymin=temp_min, ymax=temp_max), 
+                                ymin=min_temp, ymax=max_temp), 
               fill="#CACBE8", alpha=0.5) +
-  #geom_point(data=weather2, aes(date, temperature, colour=temperature)) +
-  #scale_colour_gradient2(low="darkblue", mid="white", high="coral4",
-                         #aesthetics="colour", midpoint=15) +
   geom_line(data=data, aes(as.Date(date), bats_total/200), 
             size=0.6, col="#1F2148") +
+  theme_minimal() +
+  theme(panel.grid.major=element_blank(), 
+        panel.grid.minor=element_blank(), 
+        panel.border=element_blank(),
+        legend.text=element_text(size=8),
+        legend.position="bottom", 
+        legend.title=element_blank(),
+        axis.text.y=element_text(angle=0, 
+                    vjust=0.5, colour="black"),
+        axis.text.x=element_text(angle=0, 
+                    vjust=1, hjust=0, colour="black"),
+        plot.margin=margin(0.5, 0, 0, 0, "cm")) +
+  scale_x_date(name="Year", date_labels="%Y", 
+               date_breaks="2 years") +
   scale_y_continuous(name="Daily temperature (°C)", 
                      sec.axis=sec_axis(~ .*200, 
                                        breaks=seq(0, 10000, 2000),
-                                       name="Flying-fox abundance")) +
-  theme_minimal() +
-  theme(panel.grid.major=element_blank(), 
-        panel.grid.minor=element_blank()) +
-  labs(x="Year", y="Temperature")
+                                       name="Flying-fox abundance"))
 print(fig5)
 ```
 
 ```{r, include=FALSE}
-jpeg(file="figures/Survey effort and weather 2012–2022 (Figure 5).jpeg", 
+jpeg(file="figures/Survey effort and weather 2012–2023 (Figure 5).jpeg", 
      width=6000, height=2500, units="px", res=800)
 print(fig5)
 dev.off()
 ```
 
-# **Density map**
+# Density map
 
 Here we map the density of flying-foxes in each tree across the camp (Fig 6). `surveys_wide` is from the `surveys` table in the database, and `trees` is from the `trees` table. 
 
@@ -299,7 +346,8 @@ surveys <- melt(surveys_wide, measure.vars=c(30:203),
 
 ```{r, results='hide', warning=FALSE, message=FALSE}
 trees <- read_excel(raw_data, sheet="trees") |>
-  clean_names()
+  clean_names() |>
+  mutate(tree = tree_id)
 
 surveys_trees <- left_join(surveys, trees, by="tree") |>
   clean_names() |>
@@ -315,6 +363,7 @@ You'll need to sign up for a Google API for this step.
 
 ```{r, results='hide', warning=FALSE, message=FALSE}
 # Use a Google API to fetch a base map
+#ggmap::register_google(key="[enter your key here]", write=TRUE)
 map <- get_map(location=c(lon=149.131749, lat=-35.289492), 
                zoom=19, source="google", 
                maptype="roadmap", crop=FALSE)
@@ -322,17 +371,18 @@ map <- get_map(location=c(lon=149.131749, lat=-35.289492),
 
   5. Order months
   6. Categorise number of bats (didn't end up using this)
-  7. Subset the data for 2019-2022
+  7. Subset the data for 2019-2023
 
 ```{r}
 data <- surveys_trees |>
   mutate(date=as.Date(date, format=c("%d/%m/%Y"))) |>
-  subset(date > "2021-12-01" & date < "2022-11-30") |>
+  subset(date > "2022-12-01" & date < "2023-11-30") |>
   mutate(month=factor(month, levels=c("Dec", "Jan", "Feb", 
                                       "Mar", "Apr", "May", 
                                       "Jun", "Jul", "Aug", 
                                       "Sep", "Oct", "Nov")),
-         foxes=cut(bats, breaks=c(-Inf, 50, 100, 200, 400, Inf), 
+         foxes=cut(as.numeric(bats), 
+                   breaks=c(-Inf, 50, 100, 200, 400, Inf), 
                    labels=c("0-50", "50-100", "100-200", 
                             "200-400", ">400"))) |>
   mutate(foxes=factor(foxes, levels=c(">400", "100-200", 
@@ -345,13 +395,13 @@ data <- surveys_trees |>
 ```{r}
 fig6 <- ggmap(map) + 
   geom_point(data, mapping=aes(x=longitude, y=latitude), 
-             shape=8, col="darkgreen", size=1) +
+             shape=8, col="darkgreen", size=1, alpha=0.2) +
   geom_point(data, size=1, 
              mapping=aes(x=longitude, y=latitude, 
-                         col=bats, alpha=bats)) +
+                         col=as.numeric(bats), alpha=as.numeric(bats))) +
   scale_colour_gradient2(low=0, midpoint=10, 
                          mid="yellow", high="red") +
-  facet_wrap(~month, ncol=4) +
+  facet_wrap(~month, ncol=3) +
   theme(panel.grid.major=element_blank(),
         panel.background=element_rect(fill="white"),
         plot.margin=unit(c(0, 0, 0, 0), "cm"),
@@ -371,13 +421,13 @@ print(fig6)
 ```
 
 ```{r, include=FALSE}
-jpeg(file="figures/Flying-fox density 2022 (Figure 6).jpeg", 
-     width=5000, height=3000, units="px", res=800)
+jpeg(file="figures/Flying-fox density 2023 (Figure 6).jpeg", 
+     width=4000, height=3500, units="px", res=800)
 print(fig6)
 dev.off()
 ```
 
-# **Session information**
+# Session information
 
 ```{r}
 # Display version information for R, OS, and packages
