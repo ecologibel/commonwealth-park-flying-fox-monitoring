@@ -1,7 +1,7 @@
 ---
 title: "ABS Commonwealth Park flying-fox population analyses and mapping"
 author: "Belinda Wilson and Shoshana Rapley"
-date: "December 22, 2024"
+date: "January 17, 2025"
 output:
   html_document:
     toc: true
@@ -14,7 +14,7 @@ output:
 editor_options:
   
   chunk_output_type: console
-knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_file = file.path(dirname(inputFile), 'tutorial.html')) })
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding=encoding, output_file=file.path(dirname(inputFile), 'tutorial.html')) })
 ---
 
 ```{r setup, include=FALSE}
@@ -25,7 +25,7 @@ knitr::opts_chunk$set(echo=TRUE, eval=TRUE, message=FALSE, warning=FALSE)
 
 In the Australian Capital Territory (ACT), [Commonwealth Park](https://www.nca.gov.au/attractions/commonwealth-park#) has been occupied by flying-foxes (FFs) seasonally every year since 2003, and the [Australasian Bat Society Inc](https://www.ausbats.org.au/) (ABS) has been surveying the camp since then. In 2012, the ABS entered into an agreement with the [National Capital Authority](https://www.nca.gov.au/environment/national-land/conservation-land-management/commonwealth-park-grey-headed-flying-fox) (NCA) to monitor this camp. Since 2013, the ABS has also been providing quarterly census survey data to the ACT and Commonwealth Governments as part of the [National Flying-fox Monitoring Program](https://www.dcceew.gov.au/environment/biodiversity/threatened/species/flying-fox-monitoring#:~:text=The%20National%20Flying%2Dfox%20Monitoring%20Program%20(NFFMP)%20is%20designed,flying%2Dfoxes%20in%20eastern%20Australia.). The survey methodology is consistent with the [CSIRO Commonwealth Flying-fox census method](http://www.environment.gov.au/biodiversity/threatened/species/pubs/310112-monitoring-methodology.pdf).
 
-Here we present the abundance and density results generated as part of the ABS' annual report to the NCA. Note that the reporting period for each year extends Dec 1–Nov 30, and the species detected were either **grey-headed flying-fox** (GHFF) or **little red flying-fox** (LRFF).
+Here we present the abundance and density results generated as part of the ABS' annual report to the NCA. Note that the reporting period for each year extends Dec 1–Nov 30, and the species surveyed included **grey-headed flying-foxes** (GHFFs) and **little red flying-foxes** (LRFFs).
 
 # Data preparation
 
@@ -86,7 +86,7 @@ data <- read_excel(raw_data, sheet="monitoring") %>%
 # Subset to current reporting period
 data_current <- data %>%
   filter(date > START & date < END) %>%
-  # If no LRFFs were recorded this year, we removed these
+  # Removed LRFFs if none were recorded this year
   filter(species != "lrff")
 ```
 
@@ -118,7 +118,6 @@ abun_raw <- ggplot(data_current) +
         axis.text.x=element_text(angle=0, 
                     vjust=1, hjust=0, colour="black"),
         axis.line=element_line(colour="lightgrey"), 
-        # Add space to the right for combined plot
         plot.margin=margin(t=0.2, r=0.5, b=0, l=0.1, "cm")) +
   labs(x="Month", y="Flying-foxes recorded")
 
@@ -179,9 +178,6 @@ abun_current <- ggarrange(abun_raw, divider, abun_smooth,
                           ncol=3, nrow=1, labels=c("a", "", "b"), 
                           label.x=0.8, label.y=0.98, 
                           widths=c(1, 0.02, 1), align="h")
-
-# Display the combined plot
-print(abun_current)
 ```
 
 ```{r, include=FALSE}
@@ -264,7 +260,7 @@ data_current_stats$true <- data_current_stats$mean/40
 ```
 
 ```{r}
-# Plot
+# Generate barplot
 mean_se_plot <- ggplot(data_current_stats, 
                        aes(x=month, y=mean, fill=type)) +
   geom_bar(stat="identity", position="dodge") + 
@@ -395,7 +391,7 @@ weather_long <- pivot_longer(weather, 5:6,
                          names_to="type", 
                          values_to="temperature")
 
-# Plot
+# Generate ribbon and line plot
 survey_weather_plot <- ggplot() +
   geom_ribbon(data=weather, aes(as.Date(date), 
                                 ymin=min, ymax=max), 
@@ -443,7 +439,7 @@ Because we didn't do any surveys in June and July, but want them to appear in ou
 
 ```{r}
 # Read in data
-surveys_wide <- read_excel("input/data.xlsx", sheet="surveys") %>%
+surveys_wide <- read_excel(raw_data, sheet="surveys") %>%
   subset(SurveyID!="N/A")
 
 # Pivot the table to wide format
@@ -458,7 +454,7 @@ surveys <- melt(surveys_wide, measure.vars=c(30:203),
 # Read in the tree-by-tree data
 trees <- read_excel(raw_data, sheet="trees") %>%
   clean_names() %>%
-  mutate(tree = tree_id)
+  mutate(tree=tree_id)
 
 # Join survey and tree data
 surveys_trees <- left_join(surveys, trees, by="tree") %>%
@@ -475,7 +471,7 @@ You'll need to sign up for a Google API for this step.
 
 ```{r, results='hide', warning=FALSE, message=FALSE}
 # Use a Google API to fetch a base map
-#ggmap::register_google(key="[enter your key here]", write=TRUE)
+#ggmap::register_google(key="enter_your_API_key_here", write=TRUE)
 map <- get_map(location=c(lon=149.131749, lat=-35.289492), 
                zoom=19, source="google", 
                maptype="roadmap", crop=FALSE)
@@ -490,10 +486,9 @@ map <- get_map(location=c(lon=149.131749, lat=-35.289492),
 data <- surveys_trees %>%
   mutate(date=as.Date(date, format=c("%d/%m/%Y"))) %>%
   subset(date > START & date < END) %>%
-  mutate(month=factor(month, levels=c("Dec", "Jan", "Feb", 
-                                      "Mar", "Apr", "May", 
-                                      "Jun", "Jul", "Aug", 
-                                      "Sep", "Oct", "Nov")),
+  mutate(month=factor(month, levels=c("Dec", "Jan", "Feb", "Mar", 
+                                      "Apr", "May", "Jun", "Jul", 
+                                      "Aug", "Sep", "Oct", "Nov")),
          foxes=cut(as.numeric(bats), 
                    breaks=c(-Inf, 50, 100, 200, 400, Inf), 
                    labels=c("0-50", "50-100", "100-200", 
@@ -510,9 +505,9 @@ data <- surveys_trees %>%
 density_map <- ggmap(map) + 
   geom_point(data, mapping=aes(x=longitude, y=latitude), 
              shape=8, col="darkgreen", size=1, alpha=0.2) +
-  geom_point(data, size=1, 
-             mapping=aes(x=longitude, y=latitude, 
-                         col=as.numeric(bats), alpha=as.numeric(bats))) +
+  geom_point(data, size=1, mapping=aes(x=longitude, y=latitude, 
+                                       col=as.numeric(bats), 
+                                       alpha=as.numeric(bats))) +
   scale_colour_gradient2(low=0, midpoint=10, 
                          mid="yellow", high="red") +
   facet_wrap(~month, ncol=3) +
@@ -541,6 +536,83 @@ print(density_map)
 ggsave(plot=density_map, 
        filename="output/fig 6 (density maps).jpeg",
        width=4000, height=3500, units="px", dpi=800)
+```
+
+# Occupation
+
+Here we plot the dates that flying-foxes occupied the camp each year. Because the flying-foxes never vacated the camp in 2014, we entered back-to-back dates to enable plotting.
+
+```{r}
+# Read in dates of camp occupation
+occ <- read_excel(raw_data, sheet="occupation") %>%
+  clean_names() %>%
+  # Exclude years with missing dates
+  filter(!is.na(arrival) & !is.na(departure)) %>% 
+  mutate(across(c(peak_date, departure, arrival, 
+                  year_start, year_end), as.Date),
+         # Extract month and day and apply a single year
+         arr_date=as.Date(paste("2012", format(arrival, 
+                                        "%m-%d"), sep="-")),
+         dep_date=as.Date(paste("2012", format(departure, 
+                                        "%m-%d"), sep="-")),
+         peak_date=as.Date(paste("2012", format(peak_date, 
+                                         "%m-%d"), sep="-")),
+         # Treat year as a factor
+         year=factor(year),
+         # Make another year factor for a secondary y-axis
+         year_sec=as.numeric(as.character(year)))
+
+# Generate plot
+# Generate plot
+occ_plot <- ggplot(occ) +
+  geom_segment(aes(y=year_sec, yend=year_sec, 
+                   x=as.Date(format(year_start, "2012-%m-%d")),
+                   xend=as.Date(format(dep_date, "2012-%m-%d")),
+                   color=year), linewidth=2) +
+  geom_segment(aes(y=year_sec, yend=year_sec, 
+                   x=as.Date(format(arr_date, "2012-%m-%d")),
+                   xend=as.Date(format(year_end, "2012-%m-%d")),
+                   color=year), linewidth=2) +
+  geom_point(aes(x=as.Date(format(peak_date, "2012-%m-%d")), 
+                 y=year_sec, fill=year), shape=21, size=5, 
+             color="white", stroke=1.2, alpha=0.6) +
+  # Add departure date labels after the bar
+  geom_text(aes(x=as.Date(format(dep_date, "2012-%m-%d")) + 5, 
+                y=year_sec, label=format(dep_date, "%d %b")),
+            hjust=0, size=2.5, color="grey50") +
+  # Add arrival date labels before the bar
+  geom_text(aes(x=as.Date(format(arr_date, "2012-%m-%d")) - 5, 
+                y=year_sec, label=format(arr_date, "%d %b")),
+            hjust=1, size=2.5, color="grey50") +
+  scale_x_date(date_labels="%b", date_breaks="1 month",
+               limits=c(as.Date("2012-01-01"), 
+                        as.Date("2012-12-31"))) +
+  scale_color_viridis_d() + scale_fill_viridis_d() +
+  scale_y_continuous(name="Year", breaks=occ$year_sec, 
+                     labels=occ$year, sec.axis=sec_axis(~.,
+                     breaks=occ$year_sec, 
+                     labels=occ$peak_abundance, 
+                     name="Peak flying-fox abundance")) +
+  theme_minimal() +
+  theme(axis.line=element_line(color="darkgrey"),
+        axis.text.y=element_text(angle=0, hjust=1),
+        axis.text.x=element_text(angle=0, hjust=1),
+        axis.title.y=element_text(margin=margin(r=10)), 
+        axis.title.y.right=element_text(margin=margin(l=10)), 
+        legend.position="none", 
+        panel.grid=element_blank(),
+        plot.margin=margin(t=0, r=0, b=0, l=0)) +
+  labs(x="Month")
+
+# Display the plot
+print(occ_plot)
+```
+
+```{r, include=FALSE}
+# Save the plot as a jpeg file
+ggsave(plot=occ_plot, 
+       filename="output/fig 7 (occupation barplot).jpeg",
+       width=6000, height=3500, units="px", dpi=800)
 ```
 
 # Session information
