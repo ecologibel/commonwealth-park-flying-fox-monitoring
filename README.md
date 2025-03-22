@@ -1,6 +1,8 @@
 # **ABS NCA flying-fox monitoring**
 
-Here, we describe the workflows and datasets used in the analyses conducted for the [Australasian Bat Society's (ABS)](https://www.ausbats.org.au/) flying-fox surveys at [Commonwealth Park](https://www.nca.gov.au/attractions/commonwealth-park#) in the Australian Capital Territory (ACT), on behalf of the [National Capital Authority (NCA)](https://www.nca.gov.au/environment/national-land/conservation-land-management/commonwealth-park-grey-headed-flying-fox).
+Here we present the workflows and datasets used in the analyses conducted for the journal article Wilson *et al*. (in prep) "*Hanging in there: the highs and lows of a flying-fox camp in a novel landscape*".
+
+This work was conducted as part of the [Australasian Bat Society's (ABS)](https://www.ausbats.org.au/) flying-fox surveys at [Commonwealth Park](https://www.nca.gov.au/attractions/commonwealth-park#) in the Australian Capital Territory (ACT), on behalf of the [National Capital Authority (NCA)](https://www.nca.gov.au/environment/national-land/conservation-land-management/commonwealth-park-grey-headed-flying-fox).
 
 ## Background
 
