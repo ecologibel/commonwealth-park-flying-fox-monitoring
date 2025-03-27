@@ -1,6 +1,6 @@
 # **Commonwealth Park flying-fox monitoring**
 
-Here we present the workflows and datasets used in the analyses conducted for the journal article Wilson *et al*. (in prep) "*Hanging in there: the highs and lows of a flying-fox camp in a novel landscape*".
+Here we present the workflows and datasets used in the analyses conducted for the journal article Wilson *et al*. (in prep) "*Hanging in there: the highs and lows of a flying-fox camp in a novel landscape*". 
 
 This work was conducted as part of the [Australasian Bat Society's (ABS)](https://www.ausbats.org.au/) flying-fox surveys at [Commonwealth Park](https://www.nca.gov.au/attractions/commonwealth-park#) in the Australian Capital Territory (ACT), on behalf of the [National Capital Authority (NCA)](https://www.nca.gov.au/environment/national-land/conservation-land-management/commonwealth-park-grey-headed-flying-fox).
 
@@ -15,15 +15,17 @@ In the Australian Capital Territory (ACT), [Commonwealth Park](https://www.nca.g
 ## Repository structure
 
 This repository follows an organised structure for clarity and reproducibility:
-- `archive`: superseded datasets and workflows 
-- `input`: raw and reference datasets (e.g., tables, spatial files) 
-- `output`: results from analyses (e.g., tables, plots, maps) 
-- `.gitattributes`: repository-specific Git settings 
-- `.gitignore`: files to exclude from version control 
-- `analyses.Rmd`: R Markdown with analysis workflows 
-- `project.Rproj`: RStudio project file for consistent setup 
-- `README.md`: project overview and usage guide 
-- `tutorial.html`: rendered summary of analyses and results 
+
+  - `archive\`: superseded datasets and workflows 
+  - `input\`: raw and reference datasets (e.g., tables, spatial files) 
+  - `output\`: results from analyses (e.g., tables, plots, maps) 
+  - `metadata\`: API key, citation, and licence files
+  - `.gitattributes`: repository-specific Git settings 
+  - `.gitignore`: files to exclude from version control 
+  - `analyses.Rmd`: R Markdown with analysis workflows 
+  - `project.Rproj`: RStudio project file for consistent setup 
+  - `README.md`: project overview and usage guide 
+  - `tutorial.html`: rendered summary of analyses and results 
 
 ## Licence
 

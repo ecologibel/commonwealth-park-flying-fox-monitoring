@@ -9,9 +9,9 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
-<meta name="author" content="Belinda Wilson and Shoshana Rapley" />
+<meta name="author" content="Wilson B &amp; Rapley S" />
 
-<meta name="date" content="2025-03-22" />
+<meta name="date" content="2025-03-27" />
 
 <title>Hanging in there: the highs and lows of a flying-fox camp in a novel landscape</title>
 
@@ -1559,8 +1559,8 @@ font-size: 0.95em;
 
 <h1 class="title toc-ignore">Hanging in there: the highs and lows of a
 flying-fox camp in a novel landscape</h1>
-<h4 class="author">Belinda Wilson and Shoshana Rapley</h4>
-<h4 class="date">March 22, 2025</h4>
+<h4 class="author">Wilson B &amp; Rapley S</h4>
+<h4 class="date">March 27, 2025</h4>
 
 </div>
 
@@ -1569,24 +1569,28 @@ flying-fox camp in a novel landscape</h1>
 <h1><span class="header-section-number">1</span>
 <strong>Background</strong></h1>
 <p>This <a href="https://support.posit.co/hc/en-us/articles/200526207-Using-RStudio-Projects">R
-project</a> presents the workflows and datasets used in the ‘<em>hanging
+project</a> presents the workflows and datasets used in the ‘<em>Hanging
 in there: the highs and lows of a flying-fox camp in a novel
-landscape</em>’ project.</p>
-<p>For information on our methodological approach, see the <a href="https://github.com/coexistence-conservation-lab/abs-nca-flying-fox-mmonitoring">GitHub
-repo</a>’s README.</p>
+landscape</em>’ project. For information on our methodological approach,
+see the <a href="https://github.com/coexistence-conservation-lab/abs-nca-flying-fox-mmonitoring">GitHub
+repo</a> README.</p>
 </div>
 <div id="abbreviations" class="section level1" number="2">
 <h1><span class="header-section-number">2</span>
 <strong>Abbreviations</strong></h1>
-<p><em>Organisations or platforms</em> - <strong>ABS:</strong>
-Australasian Bat Society - <strong>API:</strong> Application Programming
-Interface - <strong>CSIRO:</strong> Commonwealth Scientific and
-Industrial Research Organisation - <strong>NCA:</strong> National
-Capital Authority - <strong>NFFMP:</strong> National Flying-fox
-Monitoring Program</p>
+<p><em>Locations, organisations, and platforms</em></p>
+<ul>
+<li><strong>ABS:</strong> Australasian Bat Society</li>
+<li><strong>API:</strong> Application Programming Interface</li>
+<li><strong>CSIRO:</strong> Commonwealth Scientific and Industrial
+Research Organisation</li>
+<li><strong>NCA:</strong> National Capital Authority</li>
+<li><strong>NFFMP:</strong> National Flying-fox Monitoring Program</li>
+</ul>
 <p><em>Technical:</em></p>
 <ul>
 <li><strong>df:</strong> Dataframe</li>
+<li><strong>GHFF:</strong> Grey-headed flying-fox</li>
 <li><strong>GLM:</strong> Generalised linear model</li>
 <li><strong>GLMM:</strong> Generalised linear mixed model</li>
 <li><strong>mod:</strong> Model</li>
@@ -1608,9 +1612,11 @@ packages. Note that this only needs to be done once per computer.</p>
 <code>pacman</code> package.</li>
 </ol>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># Install and load required packages</span></span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(plyr, data.table, dplyr, ggmap, ggpubr, ggplot2, janitor, </span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>               lubridate, naniar, readxl, renv, reshape2, tidyr, tidyverse, </span>
-<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>               writexl)</span></code></pre></div>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(beepr, dplyr, grid, janitor, lme4, lubridate, readxl, </span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>               reshape2, tidyverse, writexl, yaml, <span class="co"># General functionality</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>               ggplot2, ggpubr, viridis, <span class="co"># Plotting</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>               ggmap, sf, <span class="co"># Mapping</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>               lme4, naniar) <span class="co"># Modelling</span></span></code></pre></div>
 <ol start="3" style="list-style-type: decimal">
 <li>Assign custom values and global settings.</li>
 </ol>
@@ -2197,10 +2203,13 @@ back-to-back dates to enable plotting.</p>
 <span id="cb23-50"><a href="#cb23-50" tabindex="-1"></a><span class="fu">print</span>(occ_plot)</span></code></pre></div>
 </div>
 </div>
-<div id="session-information" class="section level1" number="6">
-<h1><span class="header-section-number">6</span> <strong>Session
-information</strong></h1>
-<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a><span class="co"># Display session information</span></span>
+<div id="reproducibility-and-citation" class="section level1" number="6">
+<h1><span class="header-section-number">6</span> <strong>Reproducibility
+and citation</strong></h1>
+<div id="session-information" class="section level2" number="6.1">
+<h2><span class="header-section-number">6.1</span> Session
+information</h2>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a><span class="co"># Display R version, OS, and loaded packages</span></span>
 <span id="cb24-2"><a href="#cb24-2" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div>
 <pre><code>## R version 4.4.2 (2024-10-31 ucrt)
 ## Platform: x86_64-w64-mingw32/x64
@@ -2226,6 +2235,81 @@ information</strong></h1>
 ##  [9] lifecycle_1.0.4   cli_3.6.3         sass_0.4.9        jquerylib_0.1.4  
 ## [13] compiler_4.4.2    rstudioapi_0.17.1 tools_4.4.2       evaluate_1.0.1   
 ## [17] bslib_0.8.0       yaml_2.3.10       rlang_1.1.4       jsonlite_1.8.9</code></pre>
+</div>
+<div id="citation" class="section level2" number="6.2">
+<h2><span class="header-section-number">6.2</span> Citation</h2>
+<p>Finally, we define functions to extract metadata from this repository
+to generate a <code>citation.cff</code> file that can then be read and
+exported (e.g., via <a href="https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files">GitHub</a>).</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a><span class="co"># Define function to extract repo metadata</span></span>
+<span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a>extract_metadata <span class="ot">&lt;-</span> <span class="cf">function</span>(<span class="at">rmd=</span><span class="st">&quot;analyses.Rmd&quot;</span>) </span>
+<span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a>  {<span class="cf">if</span> (<span class="sc">!</span><span class="fu">requireNamespace</span>(<span class="st">&quot;yaml&quot;</span>, <span class="at">quietly=</span><span class="cn">TRUE</span>)) <span class="fu">stop</span>(<span class="st">&quot;Please install the &#39;yaml&#39; package.&quot;</span>)</span>
+<span id="cb26-4"><a href="#cb26-4" tabindex="-1"></a>   lines <span class="ot">&lt;-</span> <span class="fu">suppressWarnings</span>(<span class="fu">readLines</span>(rmd))</span>
+<span id="cb26-5"><a href="#cb26-5" tabindex="-1"></a>   yaml_start <span class="ot">&lt;-</span> <span class="fu">which</span>(lines<span class="sc">==</span><span class="st">&quot;---&quot;</span>)[<span class="dv">1</span>]</span>
+<span id="cb26-6"><a href="#cb26-6" tabindex="-1"></a>   yaml_end <span class="ot">&lt;-</span> <span class="fu">which</span>(lines<span class="sc">==</span><span class="st">&quot;---&quot;</span>)[<span class="dv">2</span>]</span>
+<span id="cb26-7"><a href="#cb26-7" tabindex="-1"></a>   yaml_block <span class="ot">&lt;-</span> lines[yaml_start<span class="sc">:</span>yaml_end]</span>
+<span id="cb26-8"><a href="#cb26-8" tabindex="-1"></a>   meta <span class="ot">&lt;-</span> yaml<span class="sc">::</span><span class="fu">yaml.load</span>(<span class="fu">paste</span>(yaml_block, <span class="at">collapse=</span><span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>))</span>
+<span id="cb26-9"><a href="#cb26-9" tabindex="-1"></a>   date_iso <span class="ot">&lt;-</span> <span class="fu">tryCatch</span>(</span>
+<span id="cb26-10"><a href="#cb26-10" tabindex="-1"></a>     <span class="fu">as.character</span>(<span class="fu">as.Date</span>(meta<span class="sc">$</span>date, <span class="at">format=</span><span class="st">&quot;%B %d, %Y&quot;</span>)), </span>
+<span id="cb26-11"><a href="#cb26-11" tabindex="-1"></a>     <span class="at">error=</span><span class="cf">function</span>(e) meta<span class="sc">$</span>date)</span>
+<span id="cb26-12"><a href="#cb26-12" tabindex="-1"></a>   repo <span class="ot">&lt;-</span> <span class="fu">tryCatch</span>(<span class="fu">system</span>(<span class="st">&quot;git config --get remote.origin.url&quot;</span>, <span class="at">intern=</span><span class="cn">TRUE</span>),</span>
+<span id="cb26-13"><a href="#cb26-13" tabindex="-1"></a>                    <span class="at">error=</span><span class="cf">function</span>(e) <span class="st">&quot;&quot;</span>)</span>
+<span id="cb26-14"><a href="#cb26-14" tabindex="-1"></a>   repo_url <span class="ot">&lt;-</span> <span class="fu">sub</span>(<span class="st">&quot;git@github.com:&quot;</span>, <span class="st">&quot;https://github.com/&quot;</span>, repo)</span>
+<span id="cb26-15"><a href="#cb26-15" tabindex="-1"></a>   repo_url <span class="ot">&lt;-</span> <span class="fu">sub</span>(<span class="st">&quot;.git$&quot;</span>, <span class="st">&quot;&quot;</span>, repo_url)</span>
+<span id="cb26-16"><a href="#cb26-16" tabindex="-1"></a>   <span class="fu">list</span>(<span class="at">title=</span>meta<span class="sc">$</span>title,</span>
+<span id="cb26-17"><a href="#cb26-17" tabindex="-1"></a>        <span class="at">author=</span>meta<span class="sc">$</span>author,</span>
+<span id="cb26-18"><a href="#cb26-18" tabindex="-1"></a>        <span class="at">date=</span>date_iso,</span>
+<span id="cb26-19"><a href="#cb26-19" tabindex="-1"></a>        <span class="at">repo=</span>repo_url,</span>
+<span id="cb26-20"><a href="#cb26-20" tabindex="-1"></a>        <span class="at">license=</span><span class="st">&quot;MIT&quot;</span>)}</span>
+<span id="cb26-21"><a href="#cb26-21" tabindex="-1"></a></span>
+<span id="cb26-22"><a href="#cb26-22" tabindex="-1"></a><span class="co"># Define function to write a citation.cff file</span></span>
+<span id="cb26-23"><a href="#cb26-23" tabindex="-1"></a>write_cff_from_rmd <span class="ot">&lt;-</span> <span class="cf">function</span>(<span class="at">rmd=</span><span class="st">&quot;analyses.Rmd&quot;</span>, </span>
+<span id="cb26-24"><a href="#cb26-24" tabindex="-1"></a>                               <span class="at">cff_path=</span><span class="st">&quot;metadata/citation.cff&quot;</span>) </span>
+<span id="cb26-25"><a href="#cb26-25" tabindex="-1"></a>  {<span class="cf">if</span> (<span class="sc">!</span><span class="fu">requireNamespace</span>(<span class="st">&quot;glue&quot;</span>, <span class="at">quietly=</span><span class="cn">TRUE</span>)) <span class="fu">stop</span>(<span class="st">&quot;Please install the &#39;glue&#39; package.&quot;</span>)</span>
+<span id="cb26-26"><a href="#cb26-26" tabindex="-1"></a>   meta <span class="ot">&lt;-</span> <span class="fu">extract_metadata</span>(rmd)</span>
+<span id="cb26-27"><a href="#cb26-27" tabindex="-1"></a>   cff <span class="ot">&lt;-</span> glue<span class="sc">::</span><span class="fu">glue</span>(</span>
+<span id="cb26-28"><a href="#cb26-28" tabindex="-1"></a>     <span class="st">&quot;cff-version: 1.2.0</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-29"><a href="#cb26-29" tabindex="-1"></a>     <span class="st">&quot;message: </span><span class="sc">\&quot;</span><span class="st">If you use this code, please cite the following.</span><span class="sc">\&quot;\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-30"><a href="#cb26-30" tabindex="-1"></a>     <span class="st">&quot;title: </span><span class="sc">\&quot;</span><span class="st">{meta$title}</span><span class="sc">\&quot;\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-31"><a href="#cb26-31" tabindex="-1"></a>     <span class="st">&quot;authors:</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-32"><a href="#cb26-32" tabindex="-1"></a>     <span class="st">&quot;  - name: {meta$author}</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-33"><a href="#cb26-33" tabindex="-1"></a>     <span class="st">&quot;date-released: {meta$date}</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-34"><a href="#cb26-34" tabindex="-1"></a>     <span class="st">&quot;repository-code: {meta$repo}</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-35"><a href="#cb26-35" tabindex="-1"></a>     <span class="st">&quot;license: {meta$license}</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb26-36"><a href="#cb26-36" tabindex="-1"></a>   <span class="fu">writeLines</span>(cff, cff_path)</span>
+<span id="cb26-37"><a href="#cb26-37" tabindex="-1"></a>   <span class="fu">message</span>(glue<span class="sc">::</span><span class="fu">glue</span>(<span class="st">&quot;{cff_path} written&quot;</span>))}</span>
+<span id="cb26-38"><a href="#cb26-38" tabindex="-1"></a></span>
+<span id="cb26-39"><a href="#cb26-39" tabindex="-1"></a><span class="co"># Define function to print the citation details</span></span>
+<span id="cb26-40"><a href="#cb26-40" tabindex="-1"></a>cite <span class="ot">&lt;-</span> <span class="cf">function</span>(<span class="at">rmd=</span><span class="st">&quot;analyses.Rmd&quot;</span>) </span>
+<span id="cb26-41"><a href="#cb26-41" tabindex="-1"></a>  {<span class="cf">if</span> (<span class="sc">!</span><span class="fu">requireNamespace</span>(<span class="st">&quot;crayon&quot;</span>, <span class="at">quietly=</span><span class="cn">TRUE</span>)) <span class="fu">stop</span>(<span class="st">&quot;Please install the &#39;crayon&#39; package.&quot;</span>)</span>
+<span id="cb26-42"><a href="#cb26-42" tabindex="-1"></a>   <span class="cf">if</span> (<span class="sc">!</span><span class="fu">requireNamespace</span>(<span class="st">&quot;glue&quot;</span>, <span class="at">quietly=</span><span class="cn">TRUE</span>)) <span class="fu">stop</span>(<span class="st">&quot;Please install the &#39;glue&#39; package.&quot;</span>)</span>
+<span id="cb26-43"><a href="#cb26-43" tabindex="-1"></a>   meta <span class="ot">&lt;-</span> <span class="fu">extract_metadata</span>(rmd)</span>
+<span id="cb26-44"><a href="#cb26-44" tabindex="-1"></a>   bold <span class="ot">&lt;-</span> crayon<span class="sc">::</span>bold</span>
+<span id="cb26-45"><a href="#cb26-45" tabindex="-1"></a>   citation <span class="ot">&lt;-</span> glue<span class="sc">::</span><span class="fu">glue</span>(</span>
+<span id="cb26-46"><a href="#cb26-46" tabindex="-1"></a>     <span class="st">&quot;</span><span class="sc">\n</span><span class="st">If you use this code, please cite the following:</span><span class="sc">\n\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-47"><a href="#cb26-47" tabindex="-1"></a>     <span class="st">&quot;{bold(glue::glue(&#39;{meta$author} ({substr(meta$date, 1, 4)})&#39;))} {meta$title}. &quot;</span>,</span>
+<span id="cb26-48"><a href="#cb26-48" tabindex="-1"></a>     <span class="st">&quot;Coexistence Conservation Lab, Fenner School of Environment and Society, &quot;</span>,</span>
+<span id="cb26-49"><a href="#cb26-49" tabindex="-1"></a>     <span class="st">&quot;The Australian National University, Canberra.</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-50"><a href="#cb26-50" tabindex="-1"></a>     <span class="st">&quot;{bold(&#39;Available at:&#39;)} {meta$repo}</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-51"><a href="#cb26-51" tabindex="-1"></a>     <span class="st">&quot;{bold(&#39;Date released:&#39;)} {meta$date}</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-52"><a href="#cb26-52" tabindex="-1"></a>     <span class="st">&quot;{bold(&#39;License:&#39;)} {meta$license}</span><span class="sc">\n\n</span><span class="st">&quot;</span>,</span>
+<span id="cb26-53"><a href="#cb26-53" tabindex="-1"></a>     <span class="st">&quot;For more information, visit https://www.coexistenceconservationlab.org/&quot;</span>)</span>
+<span id="cb26-54"><a href="#cb26-54" tabindex="-1"></a>   <span class="fu">cat</span>(citation)}</span>
+<span id="cb26-55"><a href="#cb26-55" tabindex="-1"></a></span>
+<span id="cb26-56"><a href="#cb26-56" tabindex="-1"></a><span class="co"># Create citation file quietly</span></span>
+<span id="cb26-57"><a href="#cb26-57" tabindex="-1"></a><span class="fu">invisible</span>(<span class="fu">write_cff_from_rmd</span>())</span>
+<span id="cb26-58"><a href="#cb26-58" tabindex="-1"></a></span>
+<span id="cb26-59"><a href="#cb26-59" tabindex="-1"></a><span class="co"># Print citation details</span></span>
+<span id="cb26-60"><a href="#cb26-60" tabindex="-1"></a><span class="fu">cite</span>()</span></code></pre></div>
+<pre><code>## If you use this code, please cite the following:
+## 
+## Wilson B &amp; Rapley S (2025) Hanging in there: the highs and lows of a flying-fox camp in a novel landscape. Coexistence Conservation Lab, Fenner School of Environment and Society, The Australian National University, Canberra.
+## Available at: https://github.com/ecologibel/commonwealth-park-flying-fox-monitoring
+## Date released: 2025-03-27
+## License: MIT
+## 
+## For more information, visit https://www.coexistenceconservationlab.org/</code></pre>
+</div>
 </div>
 
 

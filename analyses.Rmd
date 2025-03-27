@@ -1,6 +1,6 @@
 ---
 title: "Hanging in there: the highs and lows of a flying-fox camp in a novel landscape"
-author: "Wilson B & Rapley, S"
+author: "Wilson B & Rapley S"
 date: "March 27, 2025"
 output:
   html_document:
@@ -23,13 +23,12 @@ knitr::opts_chunk$set(echo=TRUE, eval=FALSE, message=FALSE, warning=FALSE)
 
 # **Background**
 
-This [R project](https://support.posit.co/hc/en-us/articles/200526207-Using-RStudio-Projects) presents the workflows and datasets used in the '*hanging in there: the highs and lows of a flying-fox camp in a novel landscape*' project.
-
-For information on our methodological approach, see the [GitHub repo](https://github.com/coexistence-conservation-lab/abs-nca-flying-fox-mmonitoring)'s README.
+This [R project](https://support.posit.co/hc/en-us/articles/200526207-Using-RStudio-Projects) presents the workflows and datasets used in the '*Hanging in there: the highs and lows of a flying-fox camp in a novel landscape*' project. For information on our methodological approach, see the [GitHub repo](https://github.com/coexistence-conservation-lab/abs-nca-flying-fox-mmonitoring) README.
 
 # **Abbreviations**
 
 *Locations, organisations, and platforms*
+
   - **ABS:** Australasian Bat Society
   - **API:** Application Programming Interface
   - **CSIRO:** Commonwealth Scientific and Industrial Research Organisation
@@ -37,6 +36,7 @@ For information on our methodological approach, see the [GitHub repo](https://gi
   - **NFFMP:** National Flying-fox Monitoring Program
 
 *Technical:*
+
   - **df:** Dataframe
   - **GHFF:** Grey-headed flying-fox
   - **GLM:** Generalised linear model
@@ -714,7 +714,7 @@ sessionInfo()
 
 ## Citation
 
-Finally, we define functions to extract repository metadata and generate a `citation.cff` file. This allows the citation to be read and exported (e.g., via [GitHub](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files)), and prints a formatted citation for readers.
+Finally, we define functions to extract metadata from this repository to generate a `citation.cff` file that can then be read and exported (e.g., via [GitHub](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files)). 
 
 ```{r, eval=TRUE}
 # Define function to extract repo metadata
@@ -763,16 +763,15 @@ cite <- function(rmd="analyses.Rmd")
    bold <- crayon::bold
    citation <- glue::glue(
      "\nIf you use this code, please cite the following:\n\n",
-     "{bold(glue::glue('Wilson B ({substr(meta$date, 1, 4)})'))} {meta$title}. ",
-     "Australasian Bat Society Society.\n",
+     "{bold(glue::glue('{meta$author} ({substr(meta$date, 1, 4)})'))} {meta$title}. ",
+     "Coexistence Conservation Lab, Fenner School of Environment and Society, ",
+     "The Australian National University, Canberra.\n",
      "{bold('Available at:')} {meta$repo}\n",
      "{bold('Date released:')} {meta$date}\n",
      "{bold('License:')} {meta$license}\n\n",
-     "For more information, visit https://sites.google.com/view/absflyingfoxmonitoringact/")
+     "For more information, visit https://www.coexistenceconservationlab.org/")
    cat(citation)}
-```
 
-```{r, eval=TRUE}
 # Create citation file quietly
 invisible(write_cff_from_rmd())
 
