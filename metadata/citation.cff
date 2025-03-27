@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the following."
+title: "Hanging in there: the highs and lows of a flying-fox camp in a novel landscape"
+authors:
+  - name: Wilson B & Rapley, S
+date-released: 2025-03-27
+repository-code: https://github.com/ecologibel/commonwealth-park-flying-fox-monitoring
+license: MIT

@@ -1,7 +1,7 @@
 ---
 title: "Hanging in there: the highs and lows of a flying-fox camp in a novel landscape"
-author: "Belinda Wilson and Shoshana Rapley"
-date: "March 22, 2025"
+author: "Wilson B & Rapley, S"
+date: "March 27, 2025"
 output:
   html_document:
     toc: true
@@ -29,7 +29,7 @@ For information on our methodological approach, see the [GitHub repo](https://gi
 
 # **Abbreviations**
 
-*Organisations or platforms*
+*Locations, organisations, and platforms*
   - **ABS:** Australasian Bat Society
   - **API:** Application Programming Interface
   - **CSIRO:** Commonwealth Scientific and Industrial Research Organisation
@@ -37,8 +37,8 @@ For information on our methodological approach, see the [GitHub repo](https://gi
   - **NFFMP:** National Flying-fox Monitoring Program
 
 *Technical:*
-
   - **df:** Dataframe
+  - **GHFF:** Grey-headed flying-fox
   - **GLM:** Generalised linear model
   - **GLMM:** Generalised linear mixed model
   - **mod:** Model
@@ -58,9 +58,11 @@ install.packages(pacman)
 
 ```{r, results='hide', warning=FALSE, message=FALSE}
 # Install and load required packages
-pacman::p_load(plyr, data.table, dplyr, ggmap, ggpubr, ggplot2, janitor, 
-               lubridate, naniar, readxl, renv, reshape2, tidyr, tidyverse, 
-               writexl)
+pacman::p_load(beepr, dplyr, grid, janitor, lme4, lubridate, readxl, 
+               reshape2, tidyverse, writexl, yaml, # General functionality
+               ggplot2, ggpubr, viridis, # Plotting
+               ggmap, sf, # Mapping
+               lme4, naniar) # Modelling
 ```
 
   3. Assign custom values and global settings.
@@ -701,9 +703,79 @@ ggsave(plot=occ_plot,
        height=3500, width=6000, units="px", dpi=800)
 ```
 
-# **Session information**
+# **Reproducibility and citation**
+
+## Session information
 
 ```{r, eval=TRUE}
-# Display session information
+# Display R version, OS, and loaded packages
 sessionInfo()
+```
+
+## Citation
+
+Finally, we define functions to extract repository metadata and generate a `citation.cff` file. This allows the citation to be read and exported (e.g., via [GitHub](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files)), and prints a formatted citation for readers.
+
+```{r, eval=TRUE}
+# Define function to extract repo metadata
+extract_metadata <- function(rmd="analyses.Rmd") 
+  {if (!requireNamespace("yaml", quietly=TRUE)) stop("Please install the 'yaml' package.")
+   lines <- suppressWarnings(readLines(rmd))
+   yaml_start <- which(lines=="---")[1]
+   yaml_end <- which(lines=="---")[2]
+   yaml_block <- lines[yaml_start:yaml_end]
+   meta <- yaml::yaml.load(paste(yaml_block, collapse="\n"))
+   date_iso <- tryCatch(
+     as.character(as.Date(meta$date, format="%B %d, %Y")), 
+     error=function(e) meta$date)
+   repo <- tryCatch(system("git config --get remote.origin.url", intern=TRUE),
+                    error=function(e) "")
+   repo_url <- sub("git@github.com:", "https://github.com/", repo)
+   repo_url <- sub(".git$", "", repo_url)
+   list(title=meta$title,
+        author=meta$author,
+        date=date_iso,
+        repo=repo_url,
+        license="MIT")}
+
+# Define function to write a citation.cff file
+write_cff_from_rmd <- function(rmd="analyses.Rmd", 
+                               cff_path="metadata/citation.cff") 
+  {if (!requireNamespace("glue", quietly=TRUE)) stop("Please install the 'glue' package.")
+   meta <- extract_metadata(rmd)
+   cff <- glue::glue(
+     "cff-version: 1.2.0\n",
+     "message: \"If you use this code, please cite the following.\"\n",
+     "title: \"{meta$title}\"\n",
+     "authors:\n",
+     "  - name: {meta$author}\n",
+     "date-released: {meta$date}\n",
+     "repository-code: {meta$repo}\n",
+     "license: {meta$license}\n")
+   writeLines(cff, cff_path)
+   message(glue::glue("{cff_path} written"))}
+
+# Define function to print the citation details
+cite <- function(rmd="analyses.Rmd") 
+  {if (!requireNamespace("crayon", quietly=TRUE)) stop("Please install the 'crayon' package.")
+   if (!requireNamespace("glue", quietly=TRUE)) stop("Please install the 'glue' package.")
+   meta <- extract_metadata(rmd)
+   bold <- crayon::bold
+   citation <- glue::glue(
+     "\nIf you use this code, please cite the following:\n\n",
+     "{bold(glue::glue('Wilson B ({substr(meta$date, 1, 4)})'))} {meta$title}. ",
+     "Australasian Bat Society Society.\n",
+     "{bold('Available at:')} {meta$repo}\n",
+     "{bold('Date released:')} {meta$date}\n",
+     "{bold('License:')} {meta$license}\n\n",
+     "For more information, visit https://sites.google.com/view/absflyingfoxmonitoringact/")
+   cat(citation)}
+```
+
+```{r, eval=TRUE}
+# Create citation file quietly
+invisible(write_cff_from_rmd())
+
+# Print citation details
+cite()
 ```
