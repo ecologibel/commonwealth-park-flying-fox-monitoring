@@ -1,0 +1,1766 @@
+---
+title: "Setup"
+author: "Wilson B A"
+date: "Nov 10, 2025"
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+    top_depth: 3
+    toc_float:
+      collapsed: true
+    theme: cerulean
+    highlight: pygments
+    self_contained: true
+editor_options:
+  chunk_output_type: console
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_file = file.path(dirname(inputFile), 'setup.html')) })
+---
+
+```{r, echo = FALSE}
+# Set knit options default
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE)
+```
+
+This `setup.Rmd` initialises your project environment by: 
+
+  1. Installing and loading required packages, 
+  2. Authorising access (e.g., for Google Maps), 
+  3. Setting global options for the environment, and 
+  4. Defining objects and functions
+
+so that the analysis scripts run without additional manual configuration.
+
+# **Install packages** 
+
+## Manually install packages
+
+This chunk manually installs packages which can't be installed using the `pacman` loader in the second chunk (e.g., `remotes` for compiling packages from GitHub). 
+
+> If you have never run this analysis before, manually run this chunk. 
+
+```{r, eval = FALSE, results = 'hide', warning = FALSE, message = FALSE}
+# Manually install `pacman` loader
+install.packages("pacman")
+
+# Install `remotes` to compile packages from GitHub 
+# if(!"remotes" %in% installed.packages()[,"Package"]) install.packages("remotes")
+```
+
+## Install and load packages
+
+This script installs and loads *commonly used* packages (*project-specific* packages are loaded in `analyses.Rmd`). 
+
+```{r, results = 'hide', warning = FALSE, message = FALSE}
+# Install and load commonly used packages
+pacman::p_load(
+  # Data import and export 
+  openxlsx, readxl, writexl, yaml, 
+  # Mapping 
+  ggmap, sf, 
+  # Plotting 
+  corrplot, ggpubr, scales, viridis, viridisLite, 
+  # Reporting 
+  english, kableExtra, rlang, rprojroot, 
+  # Statistical analyses 
+  lme4, MuMIn, 
+  # Workflow utilities 
+  beepr, cli, crayon, glue, here, 
+  # Wrangling 
+  janitor, tidyverse
+) 
+
+# Ensure dplyr::select is active to avoid masking by other packages
+select <- dplyr::select
+recode <- dplyr::recode
+```
+
+## Set up `beepr`
+
+Add "`; beep(sound)`" after a line of code to enable a sound notification. This will notify you when long-running code (which you can mark with a 🐢 symbol) finishes evaluating. 
+
+```{r}
+# Assign beepr sound (options include coin, complete, facebook, 
+# fanfare, mario, ping, ready, shotgun, sword, treasure, and wilhelm)
+sound <- "coin"
+```
+
+# **Authorise access**
+
+## Google API key
+
+To use Google's basemaps, you will need a [Google API key](https://developers.google.com/maps/documentation/javascript/get-api-key). 
+
+If you don't have a key, [create one](https://support.google.com/googleapi/answer/6158862?hl = en), save it as `api.txt` in the `metadata` folder, and register it for use with R in the chunk below. Note that our `.gitgnore` file ignores `api.txt` when pushing to Git, to keep the key secure. 
+
+```{r, eval = FALSE}
+# Read API key as a character string, while trimming whitespace
+api_key <- trimws(readLines("metadata/google maps api.txt", warn = FALSE))
+
+# Register your Google API
+ggmap::register_google(key = api_key)
+```
+
+# **Set environment** 
+
+## Conditional behaviours 
+
+Our *conditional behaviours* are defined in the `global-options` chunk of `analyses.Rmd`. These control whether downstream code is run or included in the knitted output. Here is an example that works with this `setup.Rmd`: 
+
+```{r}
+# Set chunk behaviours (e.g., chunks with 'draft = TRUE' will not run)
+knit_options <- list(
+  # Controls draft chunks
+  draft  = FALSE
+) 
+```
+
+Here are some examples of how these can be used: 
+
+  1. Chunk header condition
+
+If `draft = FALSE`, any chunks with the header option `eval = knit_options$draft` will be skipped during knitting. 
+
+```{r, eval = knit_options$draft}
+# This code only runs if draft = TRUE
+```
+
+  2. Conditional code
+
+If you want the chunk to knit but only run part of the code when `draft = TRUE`, wrap it in this `if` block: 
+
+```{r}
+# This code only runs if draft = TRUE but the chunk will still knit
+if (knit_options$draft) {
+  # your code
+}
+```
+
+## Paths 
+
+```{r}
+# Define paths for objects
+raw_data        <- "input/raw data.xlsx"
+processed_data  <- "output/processed data.xlsx"
+```
+
+## Settings 
+
+```{r}
+# Global setting to deactivate sci notation
+options(scipen = 100, digits = 8)
+
+# Return x if not NULL, otherwise y
+`%||%` <- function(x, y) if (is.null(x)) y else x
+```
+
+# **Define constants** 
+
+For consistency, we have assigned greyscale and [viridis](https://www.thinkingondata.com/something-about-viridis-library/) colour codes as objects, rather than repeating the HEX codes for each plot.
+
+You can also use `viridis_ramp()` to generate *n*-equally spaced viridis-scale colours. 
+
+```{r, results = 'hide'}
+# Define discrete greyscale colours as objects
+list2env(
+  list(
+    white = "#FFFFFF", 
+    mono1 = "#F0F0F0", 
+    mono2 = "#E5E5E5", 
+    mono3 = "#A9A9A9", 
+    mono4 = "#333333", 
+    black = "#000000"
+  ), 
+  envir   = globalenv()
+)
+
+# Define discrete slate-navy colours as objects
+list2env(
+  list(
+    navy1 = "#e4e5ec", 
+    navy2 = "#c4c6d3", 
+    navy3 = "#a1a3bb", 
+    navy4 = "#7a7e99", 
+    navy5 = "#3a3f5f" 
+  ), 
+  envir   = globalenv()
+)
+
+# Define discrete viridis colours as objects
+list2env(
+  list(
+    vir1  = "#FDE725", 
+    vir2  = "#D8E219", 
+    vir3  = "#B5DE2B", 
+    vir4  = "#90D743", 
+    vir5  = "#69CD5B", 
+    vir6  = "#42BE71", 
+    vir7  = "#27AD81", 
+    vir8  = "#1FA088", 
+    vir9  = "#2A788E", 
+    vir10 = "#3A528B", 
+    vir11 = "#443983", 
+    vir12 = "#472D7B", 
+    vir13 = "#481B6D", 
+    vir14 = "#440154"
+  ), 
+  envir   = globalenv()
+) 
+
+# Define function to generate n-equally spaced viridis-scale colours
+viridis_ramp <- function(n, option = "D") {
+  colours <- as.list(setNames(
+    viridis(n, option = option), 
+    paste0("vir", seq_len(n))
+  ))
+  list2env(colours, envir = globalenv())
+  invisible(colours)
+}
+```
+
+# **Define functions** 
+
+## Behaviour
+
+Wrap the helper function `load_message()` around other function definitions to print message when they are loaded. 
+
+```{r}
+# Define helper function to display a message when loading other functions
+load_message <- function(call, fun) {
+  assign(call, fun, envir = globalenv())
+  cli::cli_alert_success(
+    "Loaded {cli::col_green(paste0(call, '()'))} function"
+  )
+}
+```
+
+Wrap the helper function `quiet()` to stop functions displaying messages or warnings. 
+
+```{r}
+# Define function to make other functions 'quiet' (no messages or warnings)
+load_message("quiet", function(x) {
+  suppressMessages(suppressWarnings({
+    capture.output(res <- x, file = NULL, type = "output")
+    res
+  }))
+})
+```
+
+Wrap the helper function `is_knitting()` to detect whether the current environment is an interactive session (i.e., being run by us in the console) or is being knit 🧶 (e.g., when rendering an R Markdown to a `html` document). 
+
+```{r}
+# Define helper function to detect if running interactively or knitting 
+is_knitting <- function() {
+  knitr::is_latex_output() || knitr::is_html_output()
+}
+```
+
+## Data formatting
+
+### Add label breaks
+
+Use `break_labs()` to insert `\n` linebreaks at the space closest to the middle of a string (e.g., to reduce the length of plot labels). 
+
+```{r}
+# Define function to insert \n at the space closest to the middle of a string, 
+# while forcing linebreaks at the next space after 12 characters
+break_labs <- function(label, width = 12) {
+  
+  vapply(label, function(lab) {
+    words <- strsplit(lab, " ", fixed = TRUE)[[1]]
+    out <- words[1]
+    line_len <- nchar(words[1])
+    
+    for (w in words[-1]) {
+      if (line_len + 1 + nchar(w) > width) {
+        out <- paste0(out, "\n", w)
+        line_len <- nchar(w)
+      } else {
+        out <- paste(out, w)
+        line_len <- line_len + 1 + nchar(w)
+      }
+    }
+    out
+  }, character(1))
+}
+```
+
+### Create dynamic summary
+
+Use `dynamic_summary()` to glue, assign, and print a dynamic summary. 
+
+```{r}
+# Define helper function to glue, assign, and print dynamic summaries
+dynamic_summary <- function(name, ...) {
+  
+  # Capture the symbol and turn into string
+  name     <- rlang::ensym(name)
+  name_chr <- rlang::as_string(name)
+  
+  # Build string with glue
+  text     <- glue::glue(...)
+  
+  # Assign into calling environment
+  assign(name_chr, text, envir = parent.frame())
+  
+  # Print cleanly
+  cat(text, "\n")
+  invisible(text)
+}
+```
+
+### Format text
+
+  - Get exceptions to formatting functions
+
+Below are a series of helper functions to convert text to different formats for building sentences, where some words are exempted from certain functions (e.g., so as to not convert proper nouns to `lowercase()`). These words are listed in the `exceptions` sheet of `raw_data.xslx`. 
+
+```{r}
+# Read exceptions 
+exceptions <- readxl::read_excel(raw_data, sheet = "exceptions") %>%
+  janitor::clean_names()
+
+# Ensure df is globally visible 
+assign("exceptions", exceptions, envir = .GlobalEnv)
+```
+
+```{r}
+# Simplified, robust handling of multi-word phrases
+get_exceptions <- function(fun = NULL, return = "regex") {
+  if (is.null(fun)) {
+    fun <- tryCatch(rlang::caller_name(), error = function(e) NULL)
+    if (is.null(fun)) {
+      stop(colour_message(paste0(
+        "Function name could not be detected — ", 
+        "pass `fun` explicitly when using inside mutate()."),
+        colour = "yellow"
+      ))
+    }
+  }
+  
+  if (!fun %in% names(exceptions)) {
+    stop(colour_message(
+      glue::glue("No '{fun}' exceptions or replacements found."),
+      colour = "yellow"
+    ))
+  }
+  
+  exc_table <- exceptions %>%
+    dplyr::filter(!is.na(.data[[fun]]))
+  
+  exempt <- exc_table %>%
+    dplyr::filter(.data[[fun]] == "No") %>%
+    dplyr::pull(exceptions)
+  
+  subs_tbl <- exc_table %>%
+    dplyr::filter(.data[[fun]] != "No") %>%
+    dplyr::select(exceptions, !!rlang::sym(fun))
+  
+  subs <- stats::setNames(subs_tbl[[fun]], subs_tbl$exceptions)
+  
+  if (return == "regex") {
+    match_table <- exceptions %>%
+      dplyr::filter(exceptions %in% exempt) %>%
+      dplyr::select(exceptions, match)
+    
+    regex_parts <- purrr::pmap_chr(match_table, function(exceptions, match) {
+      
+      # Flag multi-word
+      is_multi <- grepl("\\s", exceptions)
+      
+      case_when(
+        # Exact single-word
+        match == "Exact" & !is_multi ~ stringr::str_c("(?<!\\w)", 
+                                                      exceptions, "(?!\\w)"),
+        
+        # Exact multi-word — no look-arounds
+        match == "Exact" &  is_multi ~ exceptions,
+        
+        # Prefix single-word (allow start of string and apostrophe after word)
+        match == "Prefix" & !is_multi ~ stringr::str_c(
+          "(?:^|(?<!\\w))", exceptions, "(?=(\\p{L}|'\\p{L}))"),
+        
+        # Prefix multi-word — drop boundaries
+        match == "Prefix" &  is_multi ~ exceptions,
+        
+        # Proper — keep simple boundaries, allow spaces
+        match == "Proper" ~ stringr::str_c("\\b", exceptions, "\\b"),
+        
+        # Uppercase abbreviations
+        match == "Uppercase" ~ stringr::str_c("\\b", exceptions, "\\b"),
+        
+        TRUE ~ exceptions
+      )
+    })
+    
+    return(stringr::str_c(regex_parts, collapse = "|"))
+  }
+  
+  if (return == "vector") return(exempt)
+  if (return == "substitutions") return(subs)
+  
+  stop(colour_message(
+    "Argument 'return' must be 'regex', 'vector', or 'substitutions'.",
+    colour = "red"
+  ))
+}
+```
+
+  - Bolden text
+  
+```{r}
+# Define universal wrapper for bold (console- and markdown-safe)
+bolden <- function(x) {
+  x <- as.character(x)
+  
+  purrr::map_chr(x, \(txt) {
+    if (is.na(txt)) return("")
+    
+    if (interactive() && !is_knitting()) {
+      # Markdown-style bold for interactive sessions
+      paste0("**", txt, "**")
+    } else {
+      # HTML bold when knitting
+      paste0("<strong>", txt, "</strong>")
+    }
+  })
+}
+
+# Test 
+bolden(c("Canis lupus"))
+```
+  
+  - Italicise text
+  
+If you have a string or list of words you want italicised (e.g., scientific names) but there are some exceptions (e.g., a single genus, or "various"), use `italicise()` to ensure those words are skipped.
+  
+```{r}
+# Define universal wrapper for `italic` (console- and markdown-safe)
+italic <- function(x) {
+  if (interactive() && !is_knitting()) {
+    # Use markdown-style asterisks when running interactively
+    paste0("*", x, "*")
+  } else {
+    # Use CLI ANSI styling when knitting or in programmatic contexts
+    cli::style_italic(x)
+  }
+}
+
+# Define function to convert character vector to lowercase
+italicise <- function(x, fun = "italicise") {
+  
+  # Coerce to character to avoid strsplit() errors
+  x <- as.character(x)
+  
+  # Get regex of exception words
+  regex <- get_exceptions(fun, return = "regex")
+  
+  purrr::map_chr(x, \(txt) {
+    # Return NA unchanged
+    if (is.na(txt)) return(txt)
+    
+    # Force the word "Various" to lowercase
+    if (tolower(txt) == "various") return("various")
+    
+    # Leave exempt words untouched
+    if (stringr::str_detect(txt, regex)) return(txt)
+    
+    # Apply markdown or HTML italics
+    if (interactive() && !is_knitting()) {
+      # Markdown-style italics for interactive sessions
+      paste0("*", txt, "*")
+    } else {
+      # HTML italics when knitting
+      paste0("<em>", txt, "</em>")
+    }
+  })
+}
+
+# Test 
+italicise(c("Canis lupus", "Various"))
+```
+  
+  - Convert to *lowercase*
+  
+Use `lower_case()` to convert text to lowercase, and `sentence_case()` to convert text to sentence case, unless there is an exception (e.g., to preserve proper nouns or species names; listed in `raw_data` > `nouns` sheet). 
+
+```{r}
+# Lowercase everything, then restore exempt parts
+lower_case_word <- function(x, fun = "lower_case_word") {
+  
+  x <- as.character(x)
+  
+  # Get regex patterns from get_exceptions()
+  regex_vec <- get_exceptions(fun, return = "regex")
+  regex <- paste0("(?i)(?:", paste(regex_vec, collapse = "|"), ")(?:'s)?")
+  
+  sapply(x, function(txt) {
+    if (is.na(txt)) return(NA_character_)
+    
+    # Lower entire string
+    lower_txt <- tolower(txt)
+    
+    # Find all matches from the original text
+    matches <- stringr::str_extract_all(txt, regex, simplify = FALSE)[[1]]
+    
+    # Restore matched sections (case-sensitive replacement)
+    for (m in matches) {
+      lower_txt <- stringr::str_replace(lower_txt, tolower(m), m)
+    }
+    
+    lower_txt
+  }, USE.NAMES = FALSE)
+}
+```
+
+```{r}
+# Preserve whole phrases if they contain exempt multi-word matches
+lower_case_phrase <- function(x, fun = "lower_case_phrase") {
+  
+  x <- as.character(x)
+  
+  regex_vec <- get_exceptions(fun, return = "regex")
+  regex <- paste0("(?i)(?:", paste(regex_vec, collapse = "|"), ")(?:'s)?")
+  
+  sapply(x, function(txt) {
+    if (is.na(txt)) return(NA_character_)
+    
+    # If text fully matches an exempt phrase, keep as-is
+    if (stringr::str_detect(txt, regex)) {
+      # Lowercase the rest but preserve any exempt substring
+      lower_txt <- tolower(txt)
+      matches <- stringr::str_extract_all(txt, regex, simplify = FALSE)[[1]]
+      for (m in matches) {
+        lower_txt <- stringr::str_replace(lower_txt, tolower(m), m)
+      }
+      return(lower_txt)
+    } else {
+      return(tolower(txt))
+    }
+  }, USE.NAMES = FALSE)
+}
+```
+
+```{r}
+# Define wrapper to choose lowercasing method
+lower_case <- function(x, by = NULL, fun = "lower_case") {
+  
+  # Default to 'word' if argument is missing or invalid
+  if (is.null(by) || !by %in% c("word", "phrase")) by <- "word"
+  
+  # Apply the selected mode
+  if (by == "word") lower_case_word(x, fun = fun)
+  else               lower_case_phrase(x, fun = fun)
+}
+
+# Define test sentence
+test <- c("European Beaver", "And", "Reeve's Muntjac",
+          "inhabit Great Britain", "in The", "UK")
+
+# > European beaver and Reeve's muntjac inhabit Great Britain in the UK
+cat(lower_case(test, by = "word"))
+```
+
+  - Convert to *sentence case*
+
+Use `sentence()` to format a character vector as a human-readable sentences with the helper functions above. 
+
+```{r}
+# Define function to format a character vector in sentence case
+sentence_case <- function(x, fun = "sentence_case") {
+
+  # Get regex of exception words from exceptions sheet
+  regex <- get_exceptions(fun, return = "regex")
+  
+  # Collapse vector into a single phrase before capitalising
+  phrase <- paste(x, collapse = " ")
+  
+  # Only apply sentence case if not exempt
+  if (stringr::str_detect(phrase, regex)) {
+    phrase
+  } else {
+    stringr::str_squish(stringr::str_to_sentence(phrase))
+  }
+}
+
+# Test 
+cat(sentence_case(c(
+  "The European hedgehog is Near Threatened in Great Britain"
+)))
+```
+
+  - Convert to *written number*
+
+Use `number_to_word()` to convert a number to a written word. 
+
+```{r}
+# Define function to convert a number to a written word
+num_word <- function(x) {
+  stringr::str_replace_all(
+    x,
+    # Match whole numbers
+    "\\b\\d+\\b",  
+    function(n) as.character(english::english(as.numeric(n)))
+  )
+}
+
+# Test 
+num_word(c("There were 1, then 2, and then 10 bears!"))
+```
+
+  - Convert *plural* 
+  
+Use `pluralise()` to change text to its plural form, while accounting for `exceptions`. 
+
+```{r}
+# Define function to pluralise text
+pluralise <- function(x, fun = "pluralise") {
+  
+  # Get exception and substitution words 
+  subs <- get_exceptions(fun, return = "substitutions")
+  exc  <- get_exceptions(fun, return = "regex")
+  
+  # Helper to match plural case to input case
+  match_case <- function(original, plural) {
+    if (toupper(original) == original) return(toupper(plural))
+    if (tolower(original) == original) return(tolower(plural))
+    if (substr(original, 1, 1) == toupper(substr(original, 1, 1)))
+      return(stringr::str_to_title(plural))
+    plural
+  }
+  
+  sapply(x, function(phrase) {
+    
+    # Split by commas or 'and' (to handle multi-item phrases)
+    items <- unlist(strsplit(phrase, "\\s*(,| and )\\s*"))
+    
+    pluralised_items <- purrr::map_chr(items, function(item) {
+      words <- strsplit(item, "\\s+")[[1]]
+      n <- length(words)
+      
+      # Identify core word
+      core   <- stringr::str_remove_all(words[n], "^[[:punct:]]+|[[:punct:]]+$")
+      prefix <- stringr::str_extract(words[n], "^[[:punct:]]+")
+      suffix <- stringr::str_extract(words[n], "[[:punct:]]+$")
+      
+      # Apply pluralisation rules
+      if (stringr::str_detect(core, regex(exc, ignore_case = TRUE))) {
+        plural_core <- core
+        
+      } else if (tolower(core) %in% tolower(names(subs))) {
+        plural_core <- subs[[which(tolower(names(subs)) == tolower(core))]]
+        
+      } else if (grepl("(s|sh|ch|x|z)$", core, ignore.case = TRUE)) {
+        plural_core <- paste0(core, "es")
+        
+      } else if (grepl("[aeiou]y$", core, ignore.case = TRUE)) {
+        plural_core <- paste0(core, "s")
+        
+      } else if (grepl("y$", core, ignore.case = TRUE)) {
+        plural_core <- sub("y$", "ies", core)
+        
+      } else if (grepl("fe$", core, ignore.case = TRUE)) {
+        plural_core <- sub("fe$", "ves", core)
+        
+      } else if (grepl("f$", core, ignore.case = TRUE)) {
+        plural_core <- sub("f$", "ves", core)
+        
+      } else {
+        plural_core <- paste0(core, "s")
+      }
+      
+      plural_core <- match_case(core, plural_core)
+      prefix <- ifelse(is.na(prefix) | is.null(prefix), "", prefix)
+      suffix <- ifelse(is.na(suffix) | is.null(suffix), "", suffix)
+      
+      # Replace only final word
+      words[n] <- paste0(prefix, plural_core, suffix)
+      paste(words, collapse = " ")
+    })
+    
+    # Recombine pluralised items with commas and “and” preserved
+    # (preserve Oxford comma if present)
+    recombined <- gsub("\\s*,\\s*", ", ", paste(pluralised_items, collapse = ", "))
+    recombined
+  }, USE.NAMES = FALSE)
+}
+
+# Test 
+pluralise(c("European badger, red deer, Canada goose, 
+            house mouse, domestic sheep, grey wolf"))
+```
+
+  - Convert to *phrase*
+
+Use `phrase()` to format a character vector into a readable phrase with the Oxford comma and an "*and*" before the last character. 
+
+```{r}
+# Define function to format a character vector into an Oxford sentence 
+phrase <- function(string) {
+  n <- length(string)
+  if (n == 1) return(string)
+  if (n == 2) return(paste(string, collapse = " and "))
+  paste(paste(string[-n], collapse = ", "), ", and ", string[n], sep = "")
+}
+
+# Test 
+phrase(c("wolf", "sheep", "goose"))
+```
+
+  - Convert to *sentence*
+
+Use`sentence()` to format a character vector as a human-readable sentences using the helper functions above.
+
+```{r}
+# Format sentence with conditional lowercasing, and Oxford phrasing
+sentence <- function(x, ...) {
+  phrase(lower_case(x, ...))
+}
+
+# Test 
+sentence(c("Earthworm", "European badger", "Grey wolf"))
+```
+
+Here is an example of a constructed sentence (i.e., `dynamic_summary()`) which tests the use of `italicise()`, `lower_case()`, `num_word()`, `phrase()`, `pluralise()`, `sentence_case()`, and `sentence()` to ensure they are applying correctly, and accounting for the exceptions. 
+
+```{r}
+# Example data
+example_data <- tibble::tribble(
+  ~common_name,     ~scientific_name, ~iucn_status,
+  "Eurasian beaver", "Castor fiber",   "Least Concern",
+  "Domestic sheep",  "Ovis aries",     "Least Concern",
+  "Earthworm",       "Various",        "Least Concern",
+  "Grey wolf",       "Canis lupus",    "Least Concern"
+)
+
+# Format species names list and count 
+example_spp <- example_data %>%
+  rowwise() %>%
+  mutate(
+    com    = lower_case(pluralise(common_name)),
+    sci    = italicise(scientific_name),
+    status = sentence_case(iucn_status),
+    lab    = glue("{com} ({sci})")
+  ) %>%
+  ungroup()
+
+# Count species
+spp_n <- nrow(example_spp)
+
+# Construct phrase
+spp_phrase <- phrase(example_spp$lab)
+
+# Identify IUCN status
+status <- unique(example_spp$status)
+
+# Build dynamic summary 
+dynamic_summary(
+  example_sentence, 
+    "The study focused on the {num_word(spp_n)} species: {spp_phrase} — ",
+    "all of which are currently of {status} under the IUCN Red List."
+)
+```
+
+### Get factor labels
+
+Use `get_labs()` to automatically generate label as character vector objects from the `levels` sheet in `raw_data`. Three lists are created for each factor: `factor$abbr` (abbreviated), `factor$cap` (capitalised), and `factor$low` (lowercase). 
+
+```{r}
+# Define function to create factor labels from raw_data
+load_message("get_labs", function(sheet = "levels", envir = parent.frame()) {
+
+  # Local helpers
+  fmt_sentence <- function(x) stringr::str_to_sentence(stringr::str_to_lower(x))
+  fmt_lower    <- function(x) stringr::str_to_lower(x)
+
+  make_named <- function(x, nm)
+    if (length(x) && length(nm)) setNames(x, nm) else character(0)
+
+  # Read and tidy
+  levels_df <- readxl::read_excel(raw_data, sheet = sheet) %>%
+    janitor::clean_names() %>%
+    tidyr::fill(code, .direction = "down") %>%
+    mutate(
+      
+      # Factor object (`fg` for functional group)
+      code = trimws(tolower(stringr::str_remove_all(code, "`"))), 
+      
+      # Expanded level label (Ecosystem engineer)
+      lab = stringr::str_trim(levels_expanded), 
+      
+      # Abbreviated level label (ecos)
+      abbr = stringr::str_trim(levels_abbreviated)
+      
+    )
+
+  # Format one-row-per-level structure
+  labs_long <- levels_df %>%
+    mutate(
+      
+      # Lower case expanded level label (ecosystem engineer)
+      lower = fmt_lower(lab), 
+      
+      # Lower case with underscore separators (ecosystem_engineer)
+      obj  = make.unique(
+        snakecase::to_any_case(
+          lower, case = "snake", transliterations = "Latin-ASCII"
+        ),
+        
+        sep = "_dup"
+      ) %>% sub("_dup.*$", "", .)
+    ) %>%
+    distinct(code, abbr, lab, .keep_all = TRUE)
+
+  # Build label + lookup objects
+  codes <- unique(labs_long$code)
+
+  label_objs <- purrr::map(codes, \(code_val) {
+    sub_df <- dplyr::filter(labs_long, code == code_val)
+    list(
+      lab         = sub_df$lab,
+      lower       = sub_df$lower,
+      abbr        = sub_df$abbr,
+      obj         = sub_df$obj, 
+      abbr_to_lab = make_named(sub_df$lab, sub_df$abbr),
+      lab_to_abbr = make_named(sub_df$abbr, sub_df$lab) 
+    )
+  }) |> rlang::set_names(paste0(codes, "_labs"))
+
+  lookup_objs <- purrr::map(codes, \(code_val) {
+    sub_df <- dplyr::filter(labs_long, code == code_val)
+    tibble::tibble(
+      lab  = sub_df$lab,
+      abbr = sub_df$abbr
+    )
+  }) |> rlang::set_names(paste0(codes, "_lu")) 
+
+  # Bind to environment
+  rlang::env_bind(envir, !!!label_objs, !!!lookup_objs)
+
+  # Print count of label and lookup objects created
+  cli::cli_alert_success(paste0(
+    "Created ", length(label_objs), " label objects: ",
+    paste(cli::col_green(names(label_objs)), collapse = ", "),
+    "\nand ", length(lookup_objs), " lookup objects: ",
+    paste(cli::col_green(names(lookup_objs)), collapse = ", ")
+  ))
+
+  invisible(c(names(label_objs), names(lookup_objs)))
+})
+```
+
+### Parse markdown syntax 
+
+Use `parse_md()` to parse markdown formatting (i.e., **bold**, *italic*, and inline `code`). 
+
+```{r}
+# Define function to parse markdown syntax
+parse_md <- function(x) {
+  x <- as.character(x)
+  
+  # Parse [text](url) to <a href="url">text</a> hyperlink
+  x <- stringr::str_replace_all(
+    x, 
+    "\\[([^\\]]+)\\]\\(([^)]+)\\)", 
+    "<a href=\"\\2\">\\1</a>"
+  )
+  
+  # Parse `code` to <code>
+  x <- stringr::str_replace_all(
+    x, 
+    "`([^`]+)`", 
+    "<code>\\1</code>"
+  )
+  
+  # Parse **bold** or __bold__ to <strong>
+  x <- stringr::str_replace_all(
+    x, 
+    "\\*\\*([^*]+)\\*\\*", 
+    "<strong>\\1</strong>"
+  )
+  
+  x <- stringr::str_replace_all(
+    x, 
+    "__([^_]+)__", 
+    "<strong>\\1</strong>"
+  )
+  
+  # Parse *italic* or _italic_ to <em>
+  x <- stringr::str_replace_all(
+    x, 
+    "(?<!\\*)\\*([^*]+)\\*(?!\\*)", 
+    "<em>\\1</em>"
+  )
+  x
+}
+```
+
+### Print clean table 
+
+Use `print_clean_table()` to parse the format of **bold**, *italic*, and inline `code` formatting from spreadsheets and displays a styled table.
+
+```{r}
+# Define function to parse markdown syntax in a sheet and print cleanly
+load_message("print_clean_table", function(path, sheet, collapse = "none") {
+  
+  display <- readxl::read_excel(path, sheet = sheet) %>%
+    
+    # Coerce everything to character
+    dplyr::mutate(dplyr::across(dplyr::everything(), as.character)) %>%
+    
+    # Replace NA with empty strings
+    dplyr::mutate(dplyr::across(dplyr::everything(),
+      ~dplyr::if_else(is.na(.x), "", .x))) %>%
+    
+    # Parse markdown-like syntax into HTML
+    dplyr::mutate(dplyr::across(dplyr::everything(), parse_md))
+  
+  # Build table
+  tbl <- kableExtra::kbl(
+    display, 
+    align  = "l", 
+    escape = FALSE
+  ) %>%
+    kableExtra::kable_styling(
+      full_width = FALSE, 
+      position   = "left"
+    )
+  
+  # Collapse repeated values based on user input
+  if (collapse == "first" && ncol(display) >= 1) {
+    tbl <- tbl %>%
+      kableExtra::collapse_rows(
+        columns = 1,
+        valign  = "top"
+      )
+  } else if (collapse == "all" && ncol(display) > 1) {
+    tbl <- tbl %>%
+      kableExtra::collapse_rows(
+        columns = 1:ncol(display),
+        valign  = "top"
+      )
+  }
+  
+  return(tbl)
+})
+```
+
+### Print dynamic summaries
+
+Use `print_dynamic_summary()` to format and print all your dynamic summaries in a single clean table, assuming you have listed them in the 
+
+```{r}
+# Define function to print dynamic summaries as a grouped table
+load_message("print_dynamic_summaries", function(
+    path  = raw_data, 
+    sheet = "document",
+    envir = .GlobalEnv
+  ) {
+  
+  # Read in data
+  document <- readxl::read_excel(path, sheet = sheet) %>%
+    dplyr::filter(Element == "Dynamic summary") %>%
+    dplyr::arrange(Page)
+  
+  # Identify existing and missing objects
+  existing <- document$Object[document$Object %in% ls(envir = envir)]
+  missing  <- setdiff(document$Object, existing)
+  
+  # Add a column with the actual summary text (only for existing objects)
+  document <- document %>%
+    dplyr::mutate(
+      Text = purrr::map_chr(Object, ~{
+        if (.x %in% existing) get(.x, envir = envir) else ""
+      })
+    )
+  
+  # Parse markdown into HTML
+  document <- document %>%
+    dplyr::mutate(Text = parse_md(Text))
+  
+  # Keep only rows with actual summaries
+  display <- document %>%
+    dplyr::filter(Text != "") %>%
+    dplyr::select(
+      Page, 
+      Section, 
+      Heading, 
+      Subheading, 
+      Text
+    )
+  
+  if (nrow(display) > 0) {
+    tbl <- kableExtra::kbl(
+      display, 
+      align  = "l", 
+      escape = FALSE
+    ) %>%
+      
+      kableExtra::kable_styling(
+        full_width = FALSE, 
+        position = "left"
+      )
+    
+    if (ncol(display) >= 4) {
+      tbl <- tbl %>%
+        kableExtra::collapse_rows(
+          columns = 1:4, 
+          valign = "top"
+        )
+    }
+  } else {
+    
+    colour_message("No dynamic summaries to print", "", colour = "yellow")
+    tbl <- NULL
+  }
+  
+  # Print messages about which summaries were printed / skipped
+  colour_message(
+    "Printed dynamic summaries:",
+    paste(existing, collapse = ", "), colour = "yellow"
+  )
+  
+  if (length(missing) > 0) {
+    colour_message(
+      "Skipped missing summaries:",
+      paste(missing, collapse = ", "), colour = "yellow"
+    )
+  }
+  
+  # Return the table so knitr can render it
+  if (!is.null(tbl)) {
+    return(tbl)
+  } else {
+    return(invisible(NULL))
+  }
+  
+})
+```
+
+## Data wrangling
+
+### Export data to workbook
+
+Use `export_sheet()` to write data to a new sheet in the Excel workbook `output/processed data.xlsx` (with safeguards to avoid duplicate sheet names), rather than saving processed data in separate files.
+
+```{r}
+# Create output folder and new workbook
+workbook <- createWorkbook()
+
+# Define function to export a df to a new sheet in the workbook
+load_message("export_sheet", function(data, sheet) {
+  
+  # Ensure all character columns are encoded as UTF-8
+  data <- data %>%
+    mutate(across(where(is.character), enc2utf8))
+  
+  # Remove sheet if it already exists (case-insensitive)
+  existing_sheets <- names(workbook)
+  if (tolower(sheet) %in% tolower(existing_sheets)) {
+    removeWorksheet(workbook, sheet)
+  }
+  
+  # Add new sheet and write UTF-8-safe data
+  addWorksheet(workbook, sheet)
+  writeData(workbook, sheet, data)
+  
+  # Save workbook with overwrite enabled
+  saveWorkbook(workbook, processed_data, overwrite = TRUE)
+  return(workbook)
+})
+```
+
+### Normalise values
+
+Use `normalise()` to rescale numeric values from 0 to 1.
+
+```{r}
+# Define function for normalising values to 0–1
+normalise <- function(x) {
+  (x - min(x, na.rm = TRUE)) / 
+    (max(  x, na.rm = TRUE) - 
+       min(x, na.rm = TRUE))
+}
+```
+
+### Calculate time to dawn and dusk
+
+Use `time_to_dawn_dusk` to calculate the number of hours between `capture_time` and astronomical `dawn` and `dusk` for captures undertaken at night. This is useful when a trap session begins on a `session_date` but passes over midnight and finishes on the following date. It returns two temporal variables: 
+
+ - `dusk_to_capture`: hours between the nearest `dusk` to `capture_time`
+ - `capture_to_dawn`: hours between `capture_time` to the nearest `dawn`
+
+Your input `data` must include: 
+
+ - `latitude`, `longitude`: coordinates of the capture site
+ - `session_date`: the date the trap session began
+ - `capture_date`: the calendar date of the capture (for joining sun times)
+ - `capture_time`: the precise datetime of capture
+
+The timezone `tz` is set to "Australia/Sydney" by default.
+
+```{r}
+# Function to join sun times and calculate temporal covariates
+time_to_dawn_dusk <- function(
+    data, 
+    latitude, 
+    longitude, 
+    tz = "Australia/Sydney"
+  ) {
+  # Identify range of session dates (buffered by 2 days)
+  trap_dates <- seq(
+    min(as.Date(data$session_date)) - 2,
+    max(as.Date(data$session_date)) + 2,
+    by = "day"
+  )
+  
+  # Fetch dawn times for trap_dates
+  dawn_this <- getSunlightTimes(
+    date = trap_dates, 
+    lat  = latitude, 
+    lon  = longitude,
+    tz   = tz, 
+    keep = "dawn"
+  ) %>%
+    rename(dawn_this = dawn) %>%
+    mutate(sun_date = date) %>%
+    select(sun_date, dawn_this)
+  
+  # Fetch dawn times for adjacent dates
+  dawn_next <- getSunlightTimes(
+    date = trap_dates + 1, 
+    lat  = latitude, 
+    lon  = longitude,
+    tz   = tz, 
+    keep = "dawn"
+  ) %>%
+    
+    rename(dawn_next = dawn) %>%
+    mutate(sun_date  = date - 1) %>%
+    select(sun_date, dawn_next)
+  
+  # Fetch dusk times for trap_dates
+  dusk_this <- getSunlightTimes(
+    date = trap_dates, 
+    lat  = latitude, 
+    lon  = longitude,
+    tz   = tz, 
+    keep = "dusk"
+  ) %>%
+    
+    rename(dusk_this = dusk) %>%
+    mutate(sun_date  = date) %>%
+    select(sun_date, dusk_this)
+  
+  # Fetch dusk times for adjacent dates
+  dusk_prev <- getSunlightTimes(
+    date = trap_dates - 1, 
+    lat  = latitude, 
+    lon  = longitude,
+    tz   = tz, 
+    keep = "dusk"
+  ) %>%
+    
+    rename(dusk_prev = dusk) %>%
+    mutate(sun_date  = date + 1) %>%
+    select(sun_date, dusk_prev)
+  
+  # Combine into single table
+  sun <- reduce(
+    list(
+      dawn_this, 
+      dawn_next, 
+      dusk_this, 
+      dusk_prev
+    ),
+    full_join,
+    by = "sun_date"
+  )
+  
+  # Join to data and calculate temporal covariates
+  data <- data %>%
+    
+    # Ensure capture_date is in Date format
+    mutate(capture_date = as.Date(capture_date)) %>%
+    
+    # Join dawn/dusk times by matching to trap night
+    left_join(sun, by = c("capture_date" = "sun_date")) %>%
+    
+    # Convert all time columns to POSIXct with specified timezone
+    mutate(across(c(
+      capture_time, 
+      dawn_this, 
+      dawn_next, 
+      dusk_this, 
+      dusk_prev
+    ),
+      ~as.POSIXct(.x, tz = tz)
+    )) %>%
+    
+    # Assign true dawn as the closest dawn to capture_time
+    mutate(
+      true_dawn = if_else(
+        abs(difftime(  dawn_this, capture_time, units = "secs")) <
+          abs(difftime(dawn_next, capture_time, units = "secs")),
+        dawn_this, 
+        dawn_next
+      ),
+      # Assign true dusk as the closest dusk to capture_time
+      true_dusk = if_else(
+        abs(difftime(  dusk_prev, capture_time, units = "secs")) <
+          abs(difftime(dusk_this, capture_time, units = "secs")),
+        dusk_prev, 
+        dusk_this
+      ),
+      # Calculate hours from capture to dawn
+      capture_to_dawn = as.numeric(
+        difftime(true_dawn, capture_time, units = "hours")
+      ),
+      # Calculate hours from dusk to capture
+      dusk_to_capture = as.numeric(
+        difftime(capture_time, true_dusk, units = "hours")
+      )
+    )
+  
+  return(data)
+}
+```
+
+## Spatial wrangling
+
+The functions below help standardise and convert between CRS' (coordinate reference systems) and prepare shapefiles for mapping or analysis. As a quick summary: 
+
+### Summary of CRS
+
+  1. **Latitude and longitude:** 
+      - *Example:* -35.1641, 149.1622
+      - *Units:* degrees (°)
+      - *Pros:* global GPS standard; easy to interpret and share internationally
+      - *Cons:* not ideal for measuring distances or area, since these vary depending on latitude
+      - *Reference system:* WGS84 (World Geodetic System 1984)
+      - *CRS:* EPSG:4326 
+    
+  2. **Eastings and northings:** 
+      - *Example:* 696927, 6106623
+      - *Units:* metres
+      - *Pros:* ideal for accurate distance, area, and spatial analyses within a local region 
+      - *Cons:* values are not globally consistent, and so are only meaningful in the specific UTM (Universal Transverse Mercator) zone
+      - *Reference system:* UTM Zone 55S (SE Australia)
+      - *CRS:* EPSG:32755
+
+### Import
+
+  - Read and reproject *shapefile in UTM*
+
+Use `read_shp()` to read and reproject a shapefile as an `sf` (simple features) object suitable for spatial operations and mapping (i.e., preserves their spatial geometry and attributes). 
+
+```{r}
+# Define function to read in and reproject shapefile
+read_shp <- function(filename, crs = 4326) {
+  
+  # Construct the file path
+  path <- file.path("input/geospatial", filename)
+  
+  # Read shapefile and reproject to WGS84 (EPSG:4326)
+  st_read(dsn = path, quiet = FALSE) %>%
+    st_transform(crs = crs)
+}
+```
+
+  - Read and reproject *geopackage in UTM*
+
+Use `read_shp()` to read and reproject a shapefile as an `sf` (simple features) object suitable for spatial operations and mapping (i.e., preserves their spatial geometry and attributes). 
+
+```{r}
+# Define function to read in and reproject GeoPackage
+read_gpkg <- function(filename, crs = 4326) {
+  
+  # Construct the file path
+  path <- file.path("input/geospatial", filename)
+  
+  # Read GeoPackage and reproject to WGS84 (EPSG:4326)
+  st_read(dsn = path, quiet = FALSE) %>%
+    st_transform(crs = crs)
+}
+```
+
+### Transform
+
+  - Convert *sf object to a df* 
+
+Use `sf_to_df()` to convert an `sf` object into a simple dataframe of coordinates (i.e., dropping its spatial metadata) so it can be plotted with `geom_polygon`. 
+
+```{r}
+# Define function to convert an sf object to a coordinate df
+sf_to_df <- function(sf, crs = 4326) {
+  
+  # Reproject to WGS84 (EPSG:4326)
+  st_transform(crs) %>%
+  
+    # Extract coordinates
+    st_coordinates() %>%
+    
+    # Convert to dataframe
+    as.data.frame()
+  
+  # Add grouping variable for ggplot 
+  poly$group <- 1
+  poly
+}
+```
+
+  - Convert *UTM to WGS*
+
+Use `utm_to_wgs()` to convert **UTM eastings/northings** (m, EPSG:32755) in a df to **WGS latitude/longitude** (degrees, EPSG:4326) and add them as new columns. 
+
+```{r}
+# Define function to convert eastings/northings to latitude/longitude
+utm_to_wgs <- function(df) {
+  
+  # Accept common coordinate name variants
+  easting  <- intersect(names(df), c(
+    "eastings",  "easting",  "east",  "e"
+  ))[1]
+  
+  northing <- intersect(names(df), c(
+    "northings", "northing", "north", "n"
+  ))[1]
+  
+  if (is.na(easting) | is.na(northing))
+    stop("Could not find easting/northing columns.")
+
+  # Identify rows with valid coordinates
+  valid_idx <- which(!is.na(df[[easting]]) & !is.na(df[[northing]]))
+  if (length(valid_idx) == 0) return(df)
+  
+  # Determine safe output names
+  latitude  <- if ("latitude"  %in% names(df)) "latitude.x"  else "latitude"
+  longitude <- if ("longitude" %in% names(df)) "longitude.x" else "longitude"
+  
+  # Initialise output columns
+  df[[latitude]] <- NA_real_
+  df[[longitude]] <- NA_real_
+  
+  # Convert valid rows to WGS84
+  df_valid <- df[valid_idx, ]
+  df_sf <- st_as_sf(df_valid, coords = c(easting, northing), crs = 32755) %>%
+    st_transform(4326)
+
+  # Extract latitude and longitude at 11 cm precision and add as columns 
+  coords <- st_coordinates(df_sf)
+  df[[latitude]][valid_idx]  <- round(coords[, "Y"], digits = 6)
+  df[[longitude]][valid_idx] <- round(coords[, "X"], digits = 6)
+  df
+}
+```
+
+  - Convert *WGS to UTM*
+
+Use `wgs_to_utm()` to convert **WGS latitude/longitude** coordinates (degrees, EPSG:4326) in a df to **UTM eastings/northings** (m, EPSG:32755) and add them as new columns. 
+
+```{r}
+# Define function to convert latitude/longitude to eastings/northings
+wgs_to_utm <- function(df) {
+  
+  # Accept common column variants
+  longitude <- intersect(names(df), c("longitude", "lon", "x"))[1]
+  latitude  <- intersect(names(df), c("latitude",  "lat", "y"))[1]
+  
+  if (is.na(longitude) | is.na(latitude))
+    stop("Could not find longitude/latitude columns.")
+  
+  # Identify rows with valid coordinates
+  valid_idx <- which(!is.na(df[[longitude]]) & !is.na(df[[latitude]]))
+  if (length(valid_idx) == 0) return(df)
+  
+  # Determine safe output names
+  easting  <- if ("easting"  %in% names(df)) "easting.x"  else "easting"
+  northing <- if ("northing" %in% names(df)) "northing.x" else "northing"
+  
+  # Initialise output columns
+  df[[easting]]  <- NA_real_
+  df[[northing]] <- NA_real_
+  
+  # Convert valid rows to UTM Zone 55S (EPSG:32755)
+  df_valid <- df[valid_idx, ]
+  df_sf <- st_as_sf(df_valid, coords = c(longitude, latitude), crs = 4326) %>%
+    st_transform(32755)
+  
+  # Extract eastings and northings at 10 cm precision and add as columns
+  coords <- st_coordinates(df_sf)
+  df[[easting]][valid_idx]  <- round(coords[, "X"], digits = 1)
+  df[[northing]][valid_idx] <- round(coords[, "Y"], digits = 1)
+  
+  df
+}
+```
+
+### Export
+
+  - Export *sf as a KML file*
+
+Use `sf_to_kml()` to export any `sf` object (e.g., points, lines, or polygons) as a KML file in the `output/geospatial` folder.
+
+```{r}
+# Define function to convert and export an sf object as a KML file
+sf_to_kml <- function(
+    data, filename, folder = "output/geospatial", overwrite = TRUE) {
+  
+  # If not sf, assume data frame with lat/long columns
+  if (!inherits(data, "sf")) {
+    if (all(c("longitude", "latitude") %in% names(data))) {
+      data <- st_as_sf(
+        data, 
+        coords = c("longitude", "latitude"), 
+        crs    = 4326
+      )
+    } else {
+      stop(
+        "Input is not an sf object and lacks 'longitude'/'latitude' columns.")
+    }
+  }
+  
+  # Ensure folder exists
+  if (!dir.exists(folder)) dir.create(folder, recursive = TRUE)
+  
+  # Define output path
+  path <- file.path(folder, paste0(filename, ".kml"))
+  
+  # Delete existing file if overwrite = TRUE
+  if (overwrite && file.exists(path)) file.remove(path)
+  
+  # Transform to WGS84 for KML compatibility
+  data <- st_transform(data, crs = 4326)
+  
+  # Write as KML
+  st_write(data, path, driver = "KML", quiet = TRUE)
+  
+  # Success message
+  colour_message("KML file exported to:", path, colour = "green")
+  
+  # Prepare blue-coloured feature info
+  n_features <- cli::col_blue(nrow(data))
+  
+  if ("trap_site" %in% names(data)) {
+    sites <- head(data$trap_site, 5)
+    site_text <- paste(cli::col_blue(sites), collapse = ", ")
+    if (nrow(data) > 5) site_text <- paste0(site_text, ", ...")
+    cli::cli_alert_info(
+      "Features converted: {n_features} (e.g., {site_text})")
+  } else {
+    cli::cli_alert_info(
+      "Features converted: {n_features}")
+  }
+}
+```
+
+  - Export *sf as a GPKG file*
+
+Use `write_gpkg()` to export any `sf` object (e.g., points, lines, or polygons) as a GeoPackage file in the `output/geospatial` folder.
+
+```{r}
+# Define function to safely write GeoPackage
+write_gpkg <- function(
+    data, filename, folder = "output/geospatial") {
+  
+  # Ensure folder exists
+  if (!dir.exists(folder)) dir.create(folder, recursive = TRUE)
+  
+  # Construct the file path
+  path <- file.path(folder, paste0(filename, ".gpkg"))
+  
+  # Remove any existing file first to avoid GDAL conflicts
+  if (file.exists(path)) unlink(path, force = TRUE)
+
+  # Derive a clean layer name from the filename (without extension)
+  layer_name <- tools::file_path_sans_ext(basename(filename))
+  
+  # Write object to GeoPackage
+  st_write(
+    obj    = data, 
+    dsn    = path, 
+    layer  = layer_name, 
+    driver = "GPKG", 
+    quiet  = FALSE, 
+    append = FALSE
+  )
+}
+```
+
+## Visualisation
+
+### Plots
+
+Use `theme_plot()` to apply consistent, minimal formatting to static plots, with optional legend display. 
+
+```{r}
+# Define custom theme for a basic plot 
+theme_plot <- function(legend = FALSE) { 
+  theme_minimal() + 
+    theme(
+      axis.line        = element_line(colour = mono4), 
+      axis.text.x      = element_text(angle  = 45, 
+                                      hjust  = 1), 
+      axis.text.y      = element_text(hjust  = 0,  
+                                      margin = margin(r = 10)), 
+      axis.ticks       = element_blank(), 
+      axis.title.x     = element_text(vjust  = -2, 
+                                      margin = margin(t = 5)), 
+      axis.title.y     = element_text(vjust  = 5,  
+                                      margin = margin(r = 5)), 
+      # Conditional legend settings
+      legend.position  = if (legend) c(1, 1) else "none", 
+      legend.spacing.y = unit(0.5, "cm"), 
+      legend.text      = element_text(size   = 9), 
+      legend.title     = element_blank(), 
+      panel.background = element_rect(fill   = white), 
+      panel.border     = element_rect(colour = mono3, 
+                                      fill   = NA), 
+      panel.grid       = element_blank(), 
+      plot.margin      = margin(t = 0, 
+                                r = 0, 
+                                b = 0, 
+                                l = 0), 
+      strip.background = element_rect(fill   = mono4), 
+      strip.text       = element_text(colour = white, 
+                                      face   = "bold")
+    )
+} 
+```
+
+### Maps
+
+Use `theme_map()` to apply clean, minimal styling for geospatial maps, removing axis labels and ticks. 
+
+```{r}
+# Define custom theme for a basic map
+theme_map <- function() { 
+  theme_minimal() + 
+    theme(
+      axis.text.x       = element_blank(), 
+      axis.text.y       = element_blank(), 
+      axis.ticks.x      = element_blank(), 
+      axis.ticks.y      = element_blank(), 
+      legend.key.height = unit(1, "cm"), 
+      legend.key.size   = unit(0.5, "cm"), 
+      legend.position   = "none", 
+      legend.spacing.y  = unit(0.5, "cm"), 
+      legend.text       = element_text(size  = 9), 
+      legend.title      = element_text(size  = 9), 
+      panel.background  = element_rect(color = NA, 
+                                       fill  = white), 
+      panel.border      = element_rect(color = white), 
+      panel.grid.major  = element_blank(), 
+      panel.grid.minor  = element_blank(), 
+      plot.background   = element_rect(color = NA, 
+                                       fill  = white), 
+      plot.margin       = margin(t = 0, r = 0, b = 0, l = 0)
+    )
+} 
+```
+
+### Export
+
+Use `ggsave_plot()` to save any plot as a `JPEG` file in the `output` folder, with predefined size and resolution settings.
+
+```{r}
+# Define function to export plot as a jpeg in the `output` folder
+ggsave_plot <- function(plot, filename) {
+  suppressWarnings(
+  ggsave(
+    plot     = plot, 
+    filename = file.path("output", paste0(filename, ".jpeg")), 
+    height   = plot_height, 
+    width    = plot_width, 
+    dpi      = dpi
+  )
+)}
+```
+
+Use `ggsave_map()` to save any map as a `JPEG` file in the `output` folder, matching standard map dimensions and DPI.
+
+```{r}
+# Define function to export map as a jpeg in the `output` folder
+ggsave_map <- function(map, filename) {
+  suppressWarnings(
+  ggsave(
+    plot     = map, 
+    filename = file.path("output", paste0(filename, ".jpeg")), 
+    height   = map_height, 
+    width    = map_width, 
+    dpi      = dpi
+  )
+)}
+```
+
+## Reporting 
+
+### Messages
+
+Use these functions to print alerts that combine a short text label with a number that is coloured to match the semantic meaning of the alert: `blue_message()` for information, `green_message()` for success, `yellow_message()` for warnings, and `red_message()` for errors.  
+
+```{r}
+# Define function for colouring messages (blue, green, yellow, or red)
+colour_message <- function(text, number = NULL, colour = "green") {
+  
+  # Map colour argument to cli alert function
+  alert_fun <- switch(
+    colour,
+    blue   = cli::cli_alert_info,
+    green  = cli::cli_alert_success,
+    yellow = cli::cli_alert_warning,
+    red    = cli::cli_alert_danger,
+    cli::cli_alert_success  # default
+  )
+  
+  # Map colour argument to cli colour function
+  colour_fun <- switch(
+    colour,
+    blue   = cli::col_blue,
+    green  = cli::col_green,
+    yellow = cli::col_yellow,
+    red    = cli::col_red,
+    cli::col_green  # default
+  )
+  
+  # Define helper to apply colour to only target text 
+  apply_colour <- function(x, colour_fun) {
+    target_text <- unlist(strsplit(as.character(x), "\\s*,\\s*"))
+    paste(purrr::map_chr(target_text, colour_fun), collapse = ", ")
+  }
+  
+  # Build message text
+  message_text <- if (!is.null(number)) {
+    glue::glue("{text} {apply_colour(number, colour_fun)}")
+  } else {
+    text
+  }
+  
+  # Print formatted message
+  alert_fun(message_text)
+}
+
+# Test
+colour_message("Rows processed:", number = 42, colour = "blue")
+```
+
+### Generate citation file
+
+Use `generate_citation()` to extract metadata from `analyses.Rmd` and generate a `citation.cff` file that future users can read and export (e.g., via [GitHub](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files)). This function is supported by two helper functions: `extract_metadata()` and `write_cff_from_rmd()`. 
+
+```{r}
+# Define main markdown
+main_rmd <- "analyses.Rmd" 
+
+# Define function to extract repo metadata
+extract_metadata <- function(rmd = main_rmd) {
+  if (!requireNamespace("rmarkdown", quietly = TRUE)) {
+    stop("Please install the 'rmarkdown' package.")
+  }
+  
+  meta <- rmarkdown::yaml_front_matter(rmd)
+  
+  # Evaluate inline R if date is in backtick-R format
+  date_iso <- tryCatch({
+    if (grepl("^`r\\s.+`$", meta$date)) {
+      expr <- gsub("^`r\\s|`$", "", meta$date) 
+      as.character(eval(parse(text = expr)))
+    } else if (inherits(meta$date, "Date")) {
+      as.character(meta$date)
+    } else {
+      as.character(as.Date(meta$date, format = "%B %d, %Y"))
+    }
+  }, error = function(e) NA_character_)
+  
+  repo <- tryCatch(
+    system("git config --get remote.origin.url", intern = TRUE),
+    error = function(e) ""
+  )
+  repo_url <- sub(
+    "git@github.com:", 
+    "https://github.com/", 
+    repo
+  )
+  
+  repo_url <- sub(".git$", "", repo_url)
+  
+  list(
+    title   = meta$title, 
+    author  = meta$author, 
+    date    = date_iso, 
+    repo    = repo_url, 
+    license = "MIT"
+  )
+}
+```
+
+```{r}
+# Define function to write a citation.cff file
+write_cff_from_rmd <- function(
+  rmd = main_rmd,
+  cff_path = here::here("metadata/citation.cff")
+  ) {
+  
+  if (!requireNamespace("glue", quietly = TRUE)) {
+    stop("Please install the 'glue' package.")
+  }
+  if (!requireNamespace("cli", quietly = TRUE)) {
+    stop("Please install the 'cli' package.")
+  }
+  
+  meta <- extract_metadata(rmd)
+  dir.create(dirname(cff_path), showWarnings = FALSE, recursive = TRUE)
+  if (file.exists(cff_path)) file.remove(cff_path)
+  
+  cff <- glue::glue(
+    "cff-version: 1.2.0\n",
+    "message: \"If you use this code, please cite the following.\"\n",
+    "title: \"{meta$title}\"\n",
+    "authors:\n",
+    "  - name: {meta$author}\n",
+    "date-released: {meta$date}\n",
+    "repository-code: {meta$repo}\n",
+    "license: {meta$license}\n"
+  )
+  writeLines(cff, cff_path, useBytes = TRUE)
+  
+  # Print success message 
+  cli::cli_alert_success(
+    "Updated {cli::col_green('citation.cff')} file"
+  )
+}
+```
+
+```{r}
+# Define function to print the citation details
+generate_citation <- function(rmd = main_rmd) {
+  if (!requireNamespace("crayon", quietly = TRUE)) {
+    stop("Please install the 'crayon' package.")
+  }
+  if (!requireNamespace("glue",   quietly = TRUE)) {
+    stop("Please install the 'glue' package.")
+  }
+  
+  meta <- extract_metadata(rmd)
+  bold <- crayon::bold
+  
+  citation <- glue::glue(
+    "\nIf you use this code, please cite the following:",
+    "\n\n{bold(glue::glue('{meta$author} ",
+    "({format(as.Date(meta$date, format = \"%B %d, %Y\"), \"%Y\")})'))} ",
+    "{meta$title}. Coexistence Conservation Lab, Fenner School of ",
+    "Environment and Society, The Australian National University, Canberra.\n",
+    "{bold('Available at:')} {meta$repo}\n",
+    "{bold('Date released:')} {meta$date}\n",
+    "{bold('License:')} {meta$license}\n\n",
+    "For more information, visit https://www.coexistenceconservationlab.org/"
+  )
+  
+  cat(citation)
+}
+```
+
+```{r}
+# Create citation file 
+invisible(write_cff_from_rmd())
+```

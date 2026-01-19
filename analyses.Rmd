@@ -1,230 +1,455 @@
 ---
 title: "Hanging in there: the highs and lows of a flying-fox camp in a novel landscape"
-author: "Wilson B & Rapley S"
-date: "March 27, 2025"
-output:
+author: "Wilson B A & Rapley S"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
   html_document:
     toc: true
     number_sections: true
-    toc_depth: 3
+    top_depth: 3
     toc_float:
-      collapsed: false
+      collapsed: true
     theme: cerulean
     highlight: pygments
+    self_contained: true
 editor_options:
-  
   chunk_output_type: console
-knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_file = file.path(dirname(inputFile), 'tutorial.html')) })
+knit: "(function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_file = file.path(dirname(inputFile), 'tutorial.html')) })"
 ---
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo=TRUE, eval=FALSE, message=FALSE, warning=FALSE)
-```
 
 # **Background**
 
-This [R project](https://support.posit.co/hc/en-us/articles/200526207-Using-RStudio-Projects) presents the workflows and datasets used in the '*Hanging in there: the highs and lows of a flying-fox camp in a novel landscape*' project. For information on our methodological approach, see the [GitHub repo](https://github.com/coexistence-conservation-lab/abs-nca-flying-fox-mmonitoring) README.
-
-# **Abbreviations**
-
-*Locations, organisations, and platforms*
-
-  - **ABS:** Australasian Bat Society
-  - **API:** Application Programming Interface
-  - **CSIRO:** Commonwealth Scientific and Industrial Research Organisation
-  - **NCA:** National Capital Authority
-  - **NFFMP:** National Flying-fox Monitoring Program
-
-*Technical:*
-
-  - **df:** Dataframe
-  - **GHFF:** Grey-headed flying-fox
-  - **GLM:** Generalised linear model
-  - **GLMM:** Generalised linear mixed model
-  - **mod:** Model
+This [R project](https://support.posit.co/hc/en-us/articles/200526207-Using-RStudio-Projects) presents the datasets and workflows used in the '*Hanging in there: the highs and lows of a flying-fox camp in a novel landscape*' project. For information, visit the [GitHub repo](https://github.com/ecologibel/commonwealth-park-flying-fox-monitoring). 
 
 # **Setup**
 
-  1. Manually install prerequisite packages.
-  
-Here we install the [pacman](https://cran.r-project.org/web/packages/pacman/index.html) package, which enables efficient installation and loading of other packages. Note that this only needs to be done once per computer.
+## Set global options
 
-```{r, eval=FALSE}
-# Manually install package
-install.packages(pacman)
+```{r global-options, echo = FALSE}
+# Set default knitting options 
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  eval = TRUE
+)
+
+# Set chunk behaviours (e.g., chunks with 'draft = TRUE' will not run)
+knit <- list(
+  # For one-off installation chunks (do not run)
+  init_once = list(eval = FALSE),
+  # For setup chunks (hide chunk and output)
+  setup     = list(echo = FALSE, message = FALSE, warning = FALSE), 
+  # For setup function chunks (show chunk but not output)
+  echo_only = list(echo = TRUE, message = FALSE, warning = FALSE),
+  # For function chunks (hide chunk but show output)
+  fun       = list(echo = FALSE), 
+  # For draft chunks (do not run)
+  draft     = list(eval = FALSE),
+  # For dynamic summary chunks (hide chunk but show inline results)
+  ds        = list(echo = FALSE, results = 'asis'),
+  # For plot chunks Plotting chunk (always run)
+  plot      = list(eval = TRUE),
+  # Set size defaults for printed figures
+  fig       = list(fig.height = 10, fig.width = 15),
+  # For ggsave chunks (always run) 
+  ggsave    = list(eval = TRUE)
+)
+
+# Define hook functions based on knit list
+knitr::opts_hooks$set(
+  draft = function(options) {
+    if (isTRUE(options$draft)) {
+      options$eval <- FALSE
+    }
+    options
+  }
+)
 ```
 
- 2. Install and load other required packages using the `pacman` package.
+## Initialise project
 
-```{r, results='hide', warning=FALSE, message=FALSE}
-# Install and load required packages
-pacman::p_load(beepr, dplyr, grid, janitor, lme4, lubridate, readxl, 
-               reshape2, tidyverse, writexl, yaml, # General functionality
-               ggplot2, ggpubr, viridis, # Plotting
-               ggmap, sf, # Mapping
-               lme4, naniar) # Modelling
+To initialise your project, load the function below then run `run_setup()`. 
+
+Depending on how many packages need installing, it may take a while. Feel free to have a look through `setup.Rmd` so you're familiar with the setup. 
+
+```{r, setup = TRUE}
+# Define setup function
+run_setup <- function(path = "setup.Rmd", total = 3) {
+  if (!requireNamespace("cli", quietly = TRUE)) {
+    install.packages("cli")}
+  library(cli)
+
+  # Progress bar
+  cli_progress_bar("Initialising setup", total = total)
+
+  if (is.null(knitr::opts_knit$get("output.dir"))) {
+    knitr::opts_knit$set(output.dir = getwd())}
+  cli_progress_update(set = 2)
+
+  if (isTRUE(getOption("knitr.in.progress"))) {
+    # During knitting → include setup.Rmd inline 
+    # (respects chunk options + text)
+    invisible(knitr::knit_child(
+      path, 
+      quiet = TRUE, 
+      envir = knitr::knit_global()))
+  } else {
+    
+    # Interactive use → inline helper to extract & eval code blocks
+    extract_r_code <- function(file) {
+      lines  <- readLines(file, warn = FALSE)
+      starts <- grep("^```\\{r", lines)
+      ends   <- grep("^```\\s*$", lines)
+      blocks <- mapply(
+        function(s, e) {
+          header <- lines[s]
+          code <- lines[(s + 1):(e - 1)]
+          # Skip if eval = FALSE
+          if (grepl("eval\\s* = \\s*FALSE", header)) return(NULL)
+          code
+        },
+        starts, 
+        ends,
+        SIMPLIFY = FALSE
+      )
+      paste(unlist(blocks), collapse = "\n")
+    }
+
+    code <- extract_r_code(path)
+    eval(parse(text = code), envir = globalenv())
+  }
+
+  cli_progress_update(set = 3)
+  cli_progress_done()
+  cli_alert_success("Setup successful!")
+}
 ```
-
-  3. Assign custom values and global settings.
 
 ```{r}
-# Assign custom values
-raw_data <- "input/data.xlsx"
-processed_data <- "output/processed_data.xlsx"
-
-# Set dates for this year's reporting period
-START <- "2024-12-01"
-END <- "2024-11-30"
-CURRENT_YEAR <- 2024
-
-# Global setting to deactivate scientific notation
-options(scipen=100, digits=4)
+# Run setup 
+run_setup()
 ```
 
-  4. Register Google API key.
+## Load project-specific packages
 
-We need a [Google API key](https://developers.google.com/maps/documentation/javascript/get-api-key) to map our sites onto Google basemaps. 
+This script installs and loads *project-specific* packages (*commonly used* packages are loaded in `setup.Rmd`). 
 
-If you don't have a Google API key, you will need to [set one up](https://support.google.com/googleapi/answer/6158862?hl=en), and paste it into the `input/api.txt` file. We have set up this repo so that Git will ignore this file so the key remains private and secure.
-
-```{r}
-# Read API key as a character string, while trimming whitespace
-api_key <- trimws(readLines("input/api.txt", warn=FALSE))
-
-# Register your Google API
-ggmap::register_google(key=api_key)
+```{r, results = 'hide', warning = FALSE, message = FALSE}
+# Install and load project-related packages
+pacman::p_load(
+  # Data wrangling
+  grid, hms, naniar, reshape2 
+) 
 ```
 
-   5. Set up [beepr](https://cran.r-project.org/web/packages/beepr/readme/README.html) package to play a sound when long-running code segments (🐢) finish running. 
+## Define resources
+
+This chunk tabulates the abbreviations used in our workflows.  
+
+```{r, draft = TRUE}
+# Read in abbrevations list and print it as a clean table
+(def <- print_clean_table(raw_data, sheet = "definitions"))
+```
+
+### Constants
 
 ```{r}
-# Assign beepr sound; options include ping, coin, fanfare, complete, shotgun, 
-# mario, treasure, ready, wilhelm, facebook, sword (try them out!)
-sound <- "coin"
+# Define dates for current reporting period
+START            <- "2024-12-01"
+END              <- "2025-11-30"
+REPORTING_PERIOD <- 2025
+
+# Define whether LRFFs were recorded in the last reporting period
+LRFFS_RECORDED   <- FALSE
+```
+
+```{r}
+# Define constant ggplot arguments
+map_height  <- 6
+map_width   <- 6
+plot_height <- 6 
+plot_width  <- 9
+dpi         <- 300
+```
+
+```{r}
+# Define columns in `monitoring` sheet
+monitoring_cols <- c(
+  "location", 
+  "survey", 
+  "date", 
+  "start", 
+  "finish", 
+  "hours", 
+  "ghff", 
+  "lrff", 
+  "trees_occupied", 
+  "include"
+)
+```
+
+### Functions
+
+```{r}
+# Define function to convert Excel times to hms
+to_hms <- function(x) {
+  # Leave hms values unchanged
+  if (inherits(x, "hms")) {
+    return(x)
+  }
+
+  # Extract time-of-day from POSIXct/POSIXlt datetimes
+  if (inherits(x, "POSIXt")) {
+    return(hms::as_hms(as.numeric(x) %% 86400))
+  }
+
+  # Convert difftime durations to seconds
+  if (inherits(x, "difftime")) {
+    return(hms::as_hms(as.numeric(x, units = "secs")))
+  }
+
+  # Handle numeric Excel times by keeping the fractional day
+  if (is.numeric(x)) {
+    frac_day <- x %% 1
+    return(hms::as_hms(frac_day * 86400))
+  }
+
+  # Parse character times and treat blanks as missing
+  x_chr <- na_if(trimws(as.character(x)), "")
+  hms::as_hms(readr::parse_time(x_chr, format = "%H:%M"))
+}
 ```
 
 # **Data preparation**
 
-We entered the FF survey data in a [Microsoft Access](https://www.microsoft.com/en-au/microsoft-365/access) database. To put this into a form that we can use in this R markdown, copy and paste the `Survey` and `Tree` tables from the database into the `input/data.xlsx` sheets of the same name. 
+We entered the FF survey data in a [Microsoft Access](https://www.microsoft.com/en-au/microsoft-365/access) database. To put this into a form that we can use in this R markdown: 
 
-Then, copy and paste the rows from the last reporting period (Dec 1–Nov 30) in the `Schedule` sheet of the `ABS flying-fox monitoring` Google spreadsheet (requires specific access) to the bottom of the `data.xlsx`'s `monitoring` sheet.
+  1. Copy the `Survey` and `Tree` tables from the database into their respective sheets in `input/raw data.xlsx`. 
+  2. Copy the rows from the last reporting period (Dec 1–Nov 30) in the `Schedule` sheet of the `ABS flying-fox monitoring` Google spreadsheet (requires specific access) to the bottom of the `monitoring` sheet.
 
-# **Report**
+# **Plots**
 
-## Species and demographics
+## Abundance and trees occupied
 
 First, we generate a **(a)** raw line graph and a **(b)** smoothed line graph by month, with two y-axes (Fig 3a):
 
-  1. Number of GHFFs over time (primary axis ranging 0–10,000)
-  2. Number of LRFFs over time (primary axis ranging 0–10,000)
-      - Currently not required, since no LRFFs were recorded this year.
-  3. Number of trees occupied (secondary axis ranging 0–160)
+  1. **Primary axis:** GHFF and LRFF abundance over time (0–10,000)
+      - *Note: no LRFFs were recorded during the 2025 reporting period.*
+  2. **Secondary axis:** Number of trees occupied by FFs (0–160)
 
-```{r, results='hide', warning=FALSE, message=FALSE}
+```{r, results = 'hide', warning = FALSE, message = FALSE}
 # Read in data
-data <- read_excel(raw_data, sheet="monitoring") %>%
+data <- read_excel(raw_data, sheet = "monitoring") %>% 
   # Standardise column names to lowercase with underscores
   clean_names() %>%
-  # Filter to the relevant location
-  filter(include=="Yes", location=="Commonwealth Park")%>%
-  mutate(lrff=as.character(lrff)) %>%
+  # Select relevant columns
+  select(all_of(monitoring_cols)) %>%
+  # Convert columns
+  mutate(
+    # Convert dates and times
+    across(c(start, finish, hours), to_hms), 
+    ghff = as.character(ghff), 
+    lrff = as.character(lrff)
+  ) %>%
+  
+  # Filter to relevant site
+  filter(
+    include  == "Yes", 
+    location == "Commonwealth Park"
+  ) %>%
+  
   # Pivot df to long format
-  pivot_longer(cols=9:10, names_to="species", values_to="count") %>% 
+  pivot_longer(
+    cols      = c("ghff", "lrff"), 
+    names_to  = "species", 
+    values_to = "count"
+  ) %>%
+  
   # Convert count values
-  mutate(count=if_else(count=="800-1000", "900", count)) %>%
-  mutate(count=if_else(count=="200-250", "225", count)) %>% 
+  mutate(count = if_else(count == "800-1000", "900", count)) %>%
+  mutate(count = if_else(count == "200-250",  "225", count)) %>% 
+  
   # Replace ranges with mean
-  mutate(count=as.numeric(count),
-         trees_occupied=as.numeric(trees_occupied),
-         date=as.Date(date, format=c("%d/%m/%Y"))) %>%
-  mutate(year=year(date))
+  mutate(
+    count          = as.numeric(count),
+    trees_occupied = as.numeric(trees_occupied),
+    date           = as.Date(date, format = c("%d/%m/%Y"))
+  ) %>%
+  mutate(year = year(date))
 
 # Subset to current reporting period
 data_current <- data %>%
   filter(date > START & date < END) %>%
-  # Removed LRFFs if none were recorded this year
-  filter(species != "lrff")
+  # Include LRFFs if LRFFS_RECORDED = TRUE 
+  filter(LRFFS_RECORDED | species != "lrff")
 
-# Export processed data to a new spreadsheet
-write_xlsx(data, "output/processed data.xlsx")
+# Export df to a new sheet in the running workbook
+workbook <- export_sheet(data, sheet = "data")
 ```
 
 **Raw line graph**
 
 ```{r}
 # Line plot raw abundance
-abun_raw <- ggplot(data_current) +
-  geom_line(mapping=aes(date, count, col=species), linewidth=0.6) +
-  geom_line(mapping=aes(date, trees_occupied*50, 
-                col='chartreuse4'), linewidth=0.6) +
-  theme_minimal() +
-  theme(axis.line=element_line(colour="darkgrey"), 
-        axis.text.x=element_text(angle=0, 
-                    vjust=1, hjust=0, colour="black"),
-        axis.text.y=element_text(angle=0, 
-                    vjust=0.5, colour="black"), 
-        axis.title.x=element_text(vjust=-2), 
-        axis.title.y=element_text(vjust=5, margin=margin(r=5)),
-        legend.position="bottom", # "c(x, y)" or "none"
-        legend.title=element_blank(), 
-        panel.background=element_rect(fill="white", colour=NA), 
-        panel.grid=element_blank(),
-        plot.margin=margin(t=0.2, r=0.5, b=0, l=0.1, "cm"), 
-        # Add a plot label
-        plot.tag=element_text(size=12, face="bold", vjust=-5), 
-        strip.background=element_blank()) + 
-  labs(x="Month", y="Flying-foxes recorded") + 
-  scale_color_manual(name='', 
-                     values=c("#CACBE8","#1F2148","#7B7FC7"), 
-                     labels=c("Trees occupied", 
-                              "Grey-headed flying-fox")) +
-  scale_x_date(date_breaks="1 month", date_labels="%b") +
-  scale_y_continuous(breaks=seq(0, 10000, 2000), 
-                     sec.axis=sec_axis(~ ./50, 
-                      name="Trees occupied"))
-
-# Display the plot
-print(abun_raw)
+(abun_raw <- ggplot(data_current) +
+  
+  geom_line(
+    mapping   = aes(date, count, col = species), 
+    linewidth = 0.6
+  ) +
+  
+  geom_line(
+    mapping   = aes(
+      date, 
+      trees_occupied*50, 
+      col     = 'chartreuse4'), 
+    linewidth = 0.6
+  ) +
+  
+  labs(
+    x = "Month", 
+    y = "Flying-foxes recorded"
+  ) + 
+  
+  scale_color_manual(
+    name   = '', 
+    values = c("#CACBE8","#1F2148","#7B7FC7"), 
+    labels = c("Trees occupied", "Grey-headed flying-fox")
+  ) +
+  scale_x_date(
+    date_breaks = "1 month", 
+    date_labels = "%b"
+  ) +
+  scale_y_continuous(
+    breaks   = seq(0, 10000, 2000), 
+    sec.axis = sec_axis(~ ./50, name = "Trees occupied")
+  ) + 
+  
+  theme_minimal() + 
+  
+  # 
+  theme(
+    axis.line        = element_line(colour = "darkgrey"), 
+    axis.text.x      = element_text(
+      angle  = 0, 
+      vjust  = 1, 
+      hjust  = 0, 
+      colour = "black"
+    ),
+    axis.text.y      = element_text(
+      angle  = 0, 
+      vjust  = 0.5, 
+      colour = "black"
+    ), 
+    axis.title.x     = element_text(vjust = -2), 
+    axis.title.y     = element_text(
+      vjust  = 5, 
+      margin = margin(r = 5)
+    ),
+    legend.position  = "bottom", # "c(x, y)" or "none"
+    legend.title     = element_blank(), 
+    panel.background = element_rect(
+      fill   = "white", 
+      colour = NA
+    ), 
+    panel.grid       = element_blank(),
+    plot.margin      = margin(t = 0.2, r = 0.5, b = 0, l = 0.2, "cm"), 
+    
+    # Add a plot label
+    plot.tag         = element_text(
+      size  = 12, 
+      face  = "bold", 
+      vjust = -5
+    ), 
+    strip.background = element_blank()
+  )
+)
 ```
 
 **Smoothed line graph**
 
 ```{r}
 # Smooth plot abundance
-abun_smooth <- ggplot(data_current) +
-  geom_smooth(mapping=aes(date, count, col=species, fill=species), 
-              linewidth=0.6) +
-  geom_smooth(mapping=aes(date, trees_occupied*50, 
-                col='chartreuse4', fill='chartreuse4'), linewidth=0.6) +
+(abun_smooth <- ggplot(data_current) +
+  geom_smooth(
+    mapping   = aes(
+      col     = species, 
+      count, 
+      date, 
+      fill    = species
+    ), 
+    linewidth = 0.6
+  ) +
+  
+  geom_smooth(
+    mapping   = aes(
+      col     = 'chartreuse4', 
+      date, 
+      fill    = 'chartreuse4', 
+      trees_occupied * 50
+    ), 
+    linewidth = 0.6
+  ) + 
+  
+  labs(
+    x = "Month", 
+    y = "Flying-foxes recorded"
+  )
+
+  scale_color_manual(
+    labels = c("Trees occupied", "Grey-headed flying-fox"), 
+    name   = '', 
+    values = c("#CACBE8","#1F2148","#7B7FC7")
+  ) +
+    
+  scale_fill_manual(
+    labels = c("Trees occupied", "Grey-headed flying-fox"), 
+    name   = '', 
+    values = c("#CACBE8","#1F2148","#7B7FC7")
+  ) + 
+    
+  scale_x_date(
+    date_breaks = "1 month", 
+    date_labels = "%b"
+  ) +
+    
+  scale_y_continuous(
+    breaks   = seq(0, 10000, 2000), 
+    sec.axis = sec_axis(~ ./50, name = "Trees occupied")
+  )
+  
   theme_minimal() +
-  theme(axis.line=element_line(colour="darkgrey"), 
-        axis.text.x=element_text(angle=0, vjust=1, hjust=0, colour="black"),
-        axis.text.y=element_text(angle=0, vjust=0.5, colour="black"),
-        axis.title.x=element_text(vjust=-2), 
-        axis.title.y=element_text(vjust=5, margin=margin(r=5)),
-        legend.text=element_text(size=8),
-        legend.position=c(0.75, 0.25), # "c(x, y)" or "none"
-        legend.title=element_blank(),
-        panel.background=element_rect(fill="white", colour=NA), 
-        panel.grid.major=element_blank(), 
-        panel.grid.minor=element_blank(), 
-        panel.border=element_blank(),
-        # Add space to the left for combined plot
-        plot.margin=margin(t=0.2, r=0.1, b=0, l=0.5, "cm"), 
-        # Add a plot label
-        plot.tag=element_text(size=12, face="bold", vjust=-5), 
-        strip.background=element_blank()) + 
-  labs(x="Month", y="Flying-foxes recorded")
-  scale_color_manual(name='', values=c("#CACBE8","#1F2148","#7B7FC7"), 
-                     labels=c("Trees occupied", 
-                              "Grey-headed flying-fox")) +
-  scale_fill_manual(name='', values=c("#CACBE8","#1F2148","#7B7FC7"), 
-                     labels=c("Trees occupied", 
-                              "Grey-headed flying-fox")) +
-  scale_x_date(date_breaks="1 month", date_labels="%b") +
-  scale_y_continuous(breaks=seq(0, 10000, 2000), 
-                     sec.axis=sec_axis(~ ./50, 
-                      name="Trees occupied"))
+  
+  theme(
+    axis.line        = element_line(colour = "darkgrey"), 
+    axis.text.x      = element_text(
+      angle = 0, 
+      colour = "black", 
+      hjust = 0, 
+      vjust = 1
+    ),
+    axis.text.y      = element_text(
+      angle = 0, 
+      colour = "black", 
+      vjust = 0.5
+    ),
+    axis.title.x     = element_text(vjust = -2), 
+    axis.title.y     = element_text(vjust = 5, margin = margin(r = 5)),
+    legend.text      = element_text(size  = 8),
+    legend.position  = c(0.75, 0.25), # "c(x, y)" or "none"
+    legend.title     = element_blank(),
+    panel.background = element_rect(fill = "white", colour = NA), 
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), 
+    panel.border     = element_blank(),
+    
+    # Add space to the left for combined plot
+    plot.margin      = margin(t = 0.2, r = 0.1, b = 0, l = 0.5, "cm"), 
+    
+    # Add a plot label
+    plot.tag         = element_text(size = 12, face = "bold", vjust = -5), 
+    strip.background = element_blank()
+  )
+)
 
 # Display the plot
 print(abun_smooth)
@@ -233,30 +458,49 @@ print(abun_smooth)
 ```{r}
 # Create a light grey dividing line as an empty plot
 divider <- ggplot() +
+  
   # Add the dividing line
-  geom_vline(xintercept=0, color="black", size=0.5) +
+  geom_vline(
+    color      = "black", 
+    size       = 0.5, 
+    xintercept = 0
+  ) +
+  
   # Extend the line infinitely in the y-direction
   ylim(-Inf, Inf) +
   theme_void()
 
 # Combine plots into a single figure
-abun_current <- ggarrange(abun_raw, divider, abun_smooth, 
-                          ncol=3, nrow=1, labels=c("a", "", "b"), 
-                          label.x=0.8, label.y=0.98, 
-                          widths=c(1, 0.02, 1), align="h")
+abun_current <- ggarrange(
+  abun_raw, 
+  divider, 
+  abun_smooth, 
+  ncol    = 3, 
+  nrow    = 1, 
+  labels  = c("a", "", "b"), 
+  label.x = 0.8, 
+  label.y = 0.98, 
+  widths  = c(1, 0.02, 1), 
+  align   = "h"
+)
 
 # Display plot
 print(abun_current)
 ```
 
-```{r, include=FALSE}
-# Export plot as jpeg
-ggsave(plot=abun_current, 
-       filename="output/fig 3a (species abundance).jpeg",
-       height=100, width=250, units="mm", dpi=800)
+```{r, eval = FALSE, include = FALSE}
+# Export plot as a jpeg file
+ggsave(
+  filename = "output/fig 3a abundance.jpeg",
+  plot     = abun_current, 
+  height   = 100, 
+  width    = 250, 
+  units    = "mm", 
+  dpi      = 800
+)
 ```
 
-## Mean abundance
+## Mean abundance per month
 
 Bar graph with month on the x-axis and FF abundance on the y-axis, showing the following as separate bars with standard error bars (Fig 3b): 
 
@@ -268,36 +512,68 @@ For the purposes of plotting the mean number of trees occupied and tree-by-bat r
 
 ```{r}
 # Read in the data
-data_current <- read_excel(raw_data, sheet="monitoring") %>% 
+data_current <- read_excel(raw_data, sheet = "monitoring") %>% 
   clean_names() %>% 
-  filter(include=="Yes", location=="Commonwealth Park") %>% 
-  mutate(year=year(date)) %>% 
+  
+  filter(
+    include == "Yes", 
+    location == "Commonwealth Park"
+  ) %>% 
+  
+  mutate(year = year(date)) %>% 
   subset(date > START & date < END) %>% 
-  mutate(month=lubridate::month(date, label=TRUE, abbr=TRUE), 
-         ghff=as.numeric(ghff), 
-         lrff=as.numeric(lrff), 
-         bats_total=ghff + lrff, 
-         ratio=as.numeric(bats_total/trees_occupied)) %>% 
-  mutate(ratio=ifelse(ratio=="NaN", 0, ratio)) 
+  
+  mutate(
+    month      = lubridate::month(
+      date, 
+      label    = TRUE, 
+      abbr     = TRUE
+    ), 
+    ghff       = as.numeric(ghff), 
+    lrff       = as.numeric(lrff), 
+    bats_total = ghff + lrff, 
+    ratio      = as.numeric(bats_total / trees_occupied)
+  ) %>% 
+  
+  mutate(ratio = ifelse(ratio == "NaN", 0, ratio)) 
 
 # Calculate mean statistics
 data_current_means <- data_current %>% 
   group_by(month) %>% 
-  summarise(count_mean=mean(bats_total),
-            ratio_mean=40*mean(ratio),
-            trees_mean=40*mean(trees_occupied)) %>%
-  pivot_longer(2:4, names_to="type", values_to="mean")
+  
+  summarise(
+    count_mean = mean(bats_total),
+    ratio_mean = 40 * mean(ratio),
+    trees_mean = 40 * mean(trees_occupied)
+  ) %>%
+  
+  pivot_longer(
+    2:4, 
+    names_to = "type", 
+    values_to = "mean"
+  )
 
 # Calculate standard error (SE) statistics
 data_current_se <- data_current %>% 
   group_by(month) %>% 
-  summarise(count_se=sd(bats_total)/sqrt(length(bats_total)),
-            ratio_se=40*sd(ratio)/sqrt(length(ratio)),
-            trees_se=40*sd(trees_occupied)/sqrt(length(trees_occupied))) %>%
-  pivot_longer(2:4, names_to="type", values_to="se")
+  
+  summarise(
+    count_se = sd(bats_total) / sqrt(length(bats_total)),
+    ratio_se = 40 * sd(ratio) / sqrt(length(ratio)),
+    trees_se = 40 * sd(trees_occupied) / sqrt(length(trees_occupied))) %>%
+  
+  pivot_longer(
+    2:4, 
+    names_to  = "type", 
+    values_to = "se"
+  )
 
 # Combine means and SE
-data_current_stats <- cbind(data_current_means, data_current_se)
+data_current_stats <- cbind(
+  data_current_means, 
+  data_current_se
+)
+
 colnames(data_current_stats) <- make.unique(names(data_current_stats))
 ```
 
@@ -305,70 +581,192 @@ So each month plots regardless of whether FFs were detected, manually generate r
 
 ```{r}
 # Manually create rows for months where bats were not detected
-jul <- data.frame("Jul", "count_mean", NA, "Jul", "count_se", NA)
-names(jul) <- c("month", "type", "mean", "month.1", "type.1", "se")
+jul <- data.frame(
+  "Jul", 
+  "count_mean", 
+  NA, 
+  "Jul", 
+  "count_se", 
+  NA
+)
 
-aug <- data.frame("Aug", "count_mean", NA, "Aug", "count_se", NA)
-names(aug) <- c("month", "type", "mean", "month.1", "type.1", "se")
+names(jul) <- c(
+  "month", 
+  "type", 
+  "mean", 
+  "month.1", 
+  "type.1", 
+  "se"
+)
 
-sep <- data.frame("Sep", "count_mean", NA, "Sep", "count_se", NA)
-names(sep) <- c("month", "type", "mean", "month.1", "type.1", "se")
+aug <- data.frame(
+  "Aug", 
+  "count_mean", 
+  NA, 
+  "Aug", 
+  "count_se", 
+  NA
+)
+
+names(aug) <- c(
+  "month", 
+  "type", 
+  "mean", 
+  "month.1", 
+  "type.1", 
+  "se"
+)
+
+sep <- data.frame(
+  "Sep", 
+  "count_mean", 
+  NA, 
+  "Sep", 
+  "count_se", 
+  NA)
+
+names(sep) <- c(
+  "month", 
+  "type", 
+  "mean", 
+  "month.1", 
+  "type.1", 
+  "se"
+)
 
 # Combine rows with df
-data_current_stats <- rbind(data_current_stats, 
-                            jul, aug, sep) %>%
-  mutate(type=factor(type,levels=c("count_mean", "trees_mean", 
-                                   "ratio_mean", "count_se", 
-                                   "trees_se", "ratio_se")),
-         month=factor(month, levels=c("Dec", "Jan", "Feb", "Mar", 
-                                      "Apr", "May", "Jun", "Jul", 
-                                      "Aug", "Sep", "Oct", "Nov")))
+data_current_stats <- rbind(
+  data_current_stats, 
+  jul, 
+  aug, 
+  sep
+  ) %>%
+  
+  mutate(
+    type = factor(type, levels = c(
+      "count_mean", 
+      "trees_mean", 
+      "ratio_mean", 
+      "count_se", 
+      "trees_se", 
+      "ratio_se"
+    )),
+    
+    month = factor(month, levels = c(
+      "Dec", "Jan", "Feb", 
+      "Mar", "Apr", "May", 
+      "Jun", "Jul", "Aug", 
+      "Sep", "Oct", "Nov"
+    )
+  )
+)
 
-# Reverse ×40 multiplier
+# Reverse × 40 multiplier
 data_current_stats$true <- data_current_stats$mean/40 
 ```
 
 ```{r}
 # Generate barplot
-mean_se_plot <- ggplot(data_current_stats, 
-                       aes(x=month, y=mean, fill=type)) +
-  geom_bar(stat="identity", position="dodge") + 
-  geom_errorbar(mapping=aes(x=month, ymin=mean-se, 
-                            ymax=mean+se, col=type), 
-                position="dodge") + 
-  facet_wrap(~group, scales="free") +
-  theme_minimal() +
-  theme(axis.line=element_line(colour="darkgrey"), 
-        axis.text.x=element_text(angle=0, vjust=1, hjust=0, colour="black"),
-        axis.text.y=element_text(angle=0, vjust=0.5, colour="black"),
-        axis.title.x=element_text(vjust=-2), 
-        axis.title.y=element_text(vjust=5, margin=margin(r=5)), 
-        legend.position="bottom", # "c(x, y)" or "none"
-        legend.text=element_text(size=8),
-        legend.title=element_blank(),
-        panel.background=element_rect(fill="white", colour=NA), 
-        panel.grid.major=element_blank(), 
-        panel.grid.minor=element_blank(), 
-        panel.border=element_blank(),
-        plot.margin=margin(0.5, 0, 0, 0, "cm"), 
-        # Add a plot label 
-        plot.tag=element_text(size=12, face="bold", vjust=-5), 
-        strip.background=element_blank()) + 
-  labs(x="Month", y="Mean flying-fox abundance")
-  scale_colour_manual(name='', guide="none",
-                      values=c("#CACBE8","#7B7FC7","#1F2148")) +
-  scale_fill_manual(name='', values=c("#1F2148","#CACBE8","#7B7FC7"),
-                    labels=c("Mean flying-fox abundance", 
-                             "Mean trees occupied", 
-                             "Mean ratio of flying-fox to trees")) +
-  scale_y_continuous(sec.axis=sec_axis(~ ./40, 
-          name="Mean trees occupied and \nmean ratio of flying-fox to trees"))
+(mean_se_plot <- ggplot(
   
-# Display the plot
-print(mean_se_plot)
+  data_current_stats, 
+  aes(
+    fill = type, 
+    x    = month, 
+    y    = mean
+  )) +
+  
+  geom_bar(
+    position = "dodge", 
+    stat     = "identity"
+  ) + 
+  
+  geom_errorbar(
+    mapping = aes(
+      col   = type, 
+      x     = month, 
+      ymax  = mean+se, 
+      ymin  = mean-se
+    ), 
+    position = "dodge"
+  ) + 
+  
+  facet_wrap(
+    ~group, 
+    scales = "free"
+  ) +
+  
+  labs(
+    x = "Month", 
+    y = "Mean flying-fox abundance"
+  )
+ 
+  scale_colour_manual(
+    name   = '', 
+    guide  = "none", 
+    values = c("#CACBE8","#7B7FC7","#1F2148")
+  ) +
+    
+  scale_fill_manual(
+    name   = '', 
+    labels = c(
+      "Mean flying-fox abundance", 
+      "Mean trees occupied", 
+      "Mean ratio of flying-fox to trees"), 
+    values = c("#1F2148","#CACBE8","#7B7FC7")
+  ) +
+    
+  scale_y_continuous(
+    sec.axis = sec_axis(
+      ~ ./40, 
+      name = "Mean trees occupied and \nmean ratio of flying-fox to trees")
+  )
+   
+  theme_minimal() + 
+  
+  theme(
+    axis.line        = element_line(colour = "darkgrey"), 
+    axis.text.x      = element_text(
+      angle  = 0, 
+      colour = "black", 
+      hjust  = 0, 
+      vjust  = 1
+    ),
+    axis.text.y      = element_text(
+      angle  = 0, 
+      colour = "black", 
+      vjust  = 0.5
+    ),
+    axis.title.x     = element_text(vjust = -2), 
+    axis.title.y     = element_text(
+      margin = margin(r = 5), 
+      vjust  = 5
+    ), 
+    legend.position  = "bottom", # "c(x, y)" or "none"
+    legend.text      = element_text(size = 8),
+    legend.title     = element_blank(),
+    panel.background = element_rect(
+      colour = NA, 
+      fill   = "white"
+    ), 
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), 
+        
+    panel.border     = element_blank(),
+    plot.margin      = margin(0.5, 0, 0, 0, "cm"), 
+    
+    # Add a plot label 
+    plot.tag         = element_text(
+      face  = "bold", 
+      size  = 12, 
+      vjust = -5
+    ), 
+    strip.background = element_blank()
+  )
+)
 ```
 
-## Peak numbers
+## Mean abundance per year
 
 Stacked bar graph for 2012-23 with year on the x-axis and FF abundance on the y-axis (Fig 4), showing:
 
@@ -377,136 +775,238 @@ Stacked bar graph for 2012-23 with year on the x-axis and FF abundance on the y-
 
 ```{r}
 # Prepare the data
-data <- read_excel(raw_data, sheet="monitoring") %>%
+data <- read_excel(raw_data, sheet = "monitoring") %>%
   clean_names() %>%
   drop_na(ghff)%>%
-  filter(include=="Yes", location=="Commonwealth Park") %>%
-  mutate(ghff=if_else(ghff=="800-1000", "900", ghff)) %>%
+  
+  filter(
+    include  == "Yes", 
+    location == "Commonwealth Park"
+  ) %>%
+  
+  mutate(ghff = if_else(
+    ghff == "800-1000", 
+    "900", 
+    ghff)
+  ) %>%
+  
   # Replace ranges with mean
-  mutate(ghff=if_else(ghff=="200-250", "225", ghff)) %>% 
-  mutate(ghff=as.numeric(ghff),
-         lrff=as.numeric(lrff),
-         year=year(date)) %>% 
-  mutate(bats_total=ghff + lrff) %>%
+  mutate(ghff = if_else(
+    ghff      == "200-250", 
+    "225", 
+    ghff)
+  ) %>% 
+  
+  mutate(
+    ghff = as.numeric(ghff),
+    lrff = as.numeric(lrff),
+    year = year(date)
+  ) %>% 
+  
+  mutate(bats_total = ghff + lrff) %>%
+  
   # Remove years prior to year 2000
   filter(year > 2000)
 
 # Subset to peak abundances for each year
 peak <- data %>% 
   group_by(year) %>%
-  summarise(bats_mean=mean(bats_total), 
-            bats_max=max(bats_total)) %>%
-  mutate(bats_diff=bats_max-bats_mean) %>%
-  pivot_longer(2:4, names_to="type", values_to="stat") %>%
-  filter(type!="bats_max")
+  
+  summarise(
+    bats_mean = mean(bats_total), 
+    bats_max  = max(bats_total)
+  ) %>%
+  
+  mutate(bats_diff = bats_max-bats_mean) %>%
+  
+  pivot_longer(
+    2:4, 
+    names_to   = "type", 
+    values_to  = "stat"
+  ) %>%
+  
+  filter(type! = "bats_max")
 ```
 
 ```{r}
 # Bar plot
-abun_years <- ggplot(peak, (aes(year, stat, fill=type))) +
-  geom_bar(stat="identity") +
+(abun_years <- ggplot(peak, (aes(year, stat, fill = type))) +
+  geom_bar(stat = "identity") + 
+  
+  labs(
+    x = "Year", 
+    y = "Flying-fox abundance"
+  ) +
+  
+  scale_fill_manual(
+    labels = c("Peak", "Mean"), 
+    name   = "", 
+    values = c("#1F2148","#CACBE8")
+  ) +
+  
+  scale_x_continuous(
+    breaks = seq(2011, REPORTING_PERIOD, 1)) + 
+  scale_y_continuous(
+    breaks = seq(0, 10000, 2000))
+  
   theme_minimal() +
-  theme(axis.line=element_line(colour="darkgrey"), 
-        axis.text.x=element_text(angle=0, hjust=0, vjust=0.5),
-        axis.title.y=element_text(angle=0, hjust=0, vjust=0.5, 
-                                  margin=margin(r=5)),
-        legend.position="bottom", # "c(x, y)" or "none"
-        legend.text=element_text(size=8),
-        legend.title=element_blank(), 
-        panel.background=element_rect(fill="white", colour=NA), 
-        panel.border=element_blank(),
-        panel.grid.major=element_blank(), 
-        panel.grid.minor=element_blank(), 
-        plot.margin=margin(0.5, 0, 0, 0, "cm"),
-        # Add a plot label 
-        plot.tag=element_text(size=12, face="bold", vjust=-5),
-        plot.title=element_text(size=15, face="bold", 
-                                margin=margin(10, 0, 10, 0)), 
-        strip.background=element_blank()) + 
-  labs(x="Year", y="Flying-fox abundance") +
-  scale_fill_manual(name="", values=c("#1F2148","#CACBE8"),
-                    labels=c("Peak", "Mean")) +
-  scale_x_continuous(breaks=seq(2011, CURRENT_YEAR, 1)) + 
-  scale_y_continuous(breaks=seq(0, 10000, 2000))
+  
+  theme(
+    axis.line        = element_line(colour = "darkgrey"), 
+    axis.text.x      = element_text(angle = 0, hjust = 0, vjust = 0.5),
+    axis.title.y     = element_text(
+      angle  = 0, 
+      hjust  = 0, 
+      margin = margin(r = 5), 
+      vjust  = 0.5
+    ),
+    
+    legend.position  = "bottom", # "c(x, y)" or "none"
+    legend.text      = element_text(size = 8),
+    legend.title     = element_blank(), 
+    panel.background = element_rect(fill = "white", colour = NA), 
+    panel.border     = element_blank(),
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), 
+    plot.margin      = margin(0.5, 0, 0, 0, "cm"),
+    
+    # Add a plot label 
+    plot.tag         = element_text(size = 12, face = "bold", vjust = -5),
+    plot.title       = element_text(
+      face   = "bold", 
+      margin = margin(10, 0, 10, 0), 
+      size   = 15
+    ), 
+    strip.background = element_blank()
+  ) 
+)
 
 # Display the plot
 print(abun_years)
 ```
 
-```{r, include=FALSE}
+```{r, include = FALSE}
 # Save plot as a jpeg
-jpeg(file="output/fig 4 (abundance across years).jpeg", 
-     height=2500, width=6000, units="px", res=800)
+jpeg(
+  file   = "output/fig 4 abundance per year.jpeg", 
+  height = 2500, 
+  width  = 6000, 
+  units  = "px", 
+  res    = 800
+)
+
 print(abun_years)
 dev.off()
 ```
 
-## Survey effort and weather
+## Abundance and temperature
 
-Here we generate a line graph of FFs recorded across all years (2012–current), as well as temperature in the background (Fig 5). 
-
-We acquired weather data from the [Australian Bureau of Meteorology](http://www.bom.gov.au/climate/data/index.shtml?bookmark=136) by navigating to ACT > Past weather > Data and graphs > Text search > Maximum temperature or Minimum temperature in weather station 70351. 
+Here we overlay a line graph of FF abundance since 2012 with maximum and minimum temperature (Fig 5) from the [Australian Bureau of Meteorology](http://www.bom.gov.au/climate/data/index.shtml?bookmark = 136) (navigate to `ACT` > `Past weather` > `Data and graphs` > `Text search` > `Temperature` > `Maximum temperature` or `Minimum temperature` > weather station `70351`). 
 
 ```{r}
 # Read in weather data
-weather <- read_excel(raw_data, sheet="weather") %>%
+weather <- read_excel(raw_data, sheet = "weather") %>%
   clean_names() %>% 
   filter(year > 2011) %>%
-  rename(max="maximum_temperature_degree_c", 
-         min="minimum_temperature_degree_c") %>%
-  mutate(date=paste(year, month, day, sep="/")) %>%
-  mutate(date=as.Date(date, format=c("%Y/%m/%d")))
+  
+  rename(
+    max = "max_temperature_degree_c", 
+    min = "min_temperature_degree_c"
+  ) %>%
+  
+  mutate(date = paste(
+    year, 
+    month, 
+    day, 
+    sep = "/"
+  )) %>%
+  
+  mutate(date = as.Date(date, format = c("%Y/%m/%d")))
 
 # Pivot to long format
-weather_long <- pivot_longer(weather, 5:6, 
-                         names_to="type", 
-                         values_to="temperature")
+weather_long <- pivot_longer(
+  weather,
+  5:6, 
+  names_to  = "type", 
+  values_to = "temperature"
+)
 ```
 
 ```{r}
 # Generate ribbon and line plot
-survey_weather_plot <- ggplot() +
-  geom_ribbon(data=weather, aes(as.Date(date), 
-                                ymin=min, ymax=max), 
-              fill="#CACBE8", alpha=0.5) +
-  geom_line(data=data, aes(as.Date(date), bats_total/200), 
-            size=0.6, col="#1F2148") +
+(survey_weather_plot <- ggplot() +
+  geom_ribbon(
+    data   = weather, 
+    aes(
+      as.Date(date), 
+      ymin = min, 
+      ymax = max
+    ), 
+    alpha  = 0.5, 
+    fill   = "#CACBE8"
+  ) +
+  
+  geom_line(
+    data = data, 
+    aes(
+      as.Date(date), 
+      bats_total/200), 
+    col  = "#1F2148", 
+    size = 0.6
+  ) +
+  
+  scale_x_date(
+    name        = "Year", 
+    date_labels = "%Y", 
+    date_breaks = "2 years"
+  ) +
+  
+  scale_y_continuous(
+    name     = "Daily temperature (°C)", 
+    sec.axis = sec_axis(
+      ~ .*200, 
+      breaks = seq(0, 10000, 2000),
+      name   = "Flying-fox abundance")
+  )
+  
   theme_minimal() +
-  theme(axis.line=element_line(colour="darkgrey"), 
-        axis.text.x=element_text(hjust=0, vjust=1),
-        axis.text.y=element_text(hjust=0, vjust=0.5), 
-        axis.title.x=element_text(vjust=-2), 
-        axis.title.y=element_text(vjust=5, margin=margin(r=5)),
-        legend.position="bottom", # "c(x, y)" or "none"
-        legend.text=element_text(size=8),
-        legend.title=element_blank(), 
-        panel.background=element_rect(fill="white", colour=NA), 
-        panel.border=element_blank(),
-        panel.grid.major=element_blank(), 
-        panel.grid.minor=element_blank(), 
-        plot.margin=margin(t=0.5, r=0, b=0, l=0, "cm"), 
-        # Add a plot label 
-        plot.tag=element_text(size=12, face="bold", vjust=-5), 
-        strip.background=element_blank()) + 
-  scale_x_date(name="Year", date_labels="%Y", date_breaks="2 years") +
-  scale_y_continuous(name="Daily temperature (°C)", 
-                     sec.axis=sec_axis(~ .*200, 
-                                       breaks=seq(0, 10000, 2000),
-                                       name="Flying-fox abundance"))
-
-# Display the plot
-print(survey_weather_plot)
+  theme(
+    axis.line        = element_line(colour = "darkgrey"), 
+    axis.text.x      = element_text(hjust = 0, vjust = 1),
+    axis.text.y      = element_text(hjust = 0, vjust = 0.5), 
+    axis.title.x     = element_text(vjust = -2), 
+    axis.title.y     = element_text(vjust = 5, margin = margin(r = 5)),
+    legend.position  = "bottom", # "c(x, y)" or "none"
+    legend.text      = element_text(size = 8),
+    legend.title     = element_blank(), 
+    panel.background = element_rect(fill = "white", colour = NA), 
+    panel.border     = element_blank(),
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), 
+    plot.margin      = margin(t = 0.5, r = 0, b = 0, l = 0, "cm"), 
+    
+    # Add a plot label 
+    plot.tag         = element_text(size = 12, face = "bold", vjust = -5), 
+    strip.background = element_blank()
+  ) 
+)
 ```
 
-```{r, include=FALSE}
+```{r, include = FALSE}
 # Save plot as a jpeg
-jpeg(file="output/fig 5 (surveys and weather).jpeg", 
-     height=2500, width=6000, units="px", res=800)
+jpeg(
+  file   = "output/fig 5 abundance and temperature.jpeg", 
+  height = 2500, 
+  width  = 6000, 
+  units  = "px", 
+  res    = 800
+)
+
 print(survey_weather_plot)
 dev.off()
 ```
 
-## Density
+## Density maps
 
 Here we map the density of FFs in each tree across the camp (Fig 6). `surveys_wide` is from the `surveys` table in the database, and `trees` is from the `trees` table. 
 
@@ -516,38 +1016,48 @@ Because we didn't do any surveys in June and July, but want them to appear in ou
 
 ```{r}
 # Read in data
-surveys_wide <- read_excel(raw_data, sheet="surveys") %>%
-  subset(SurveyID!="N/A")
+surveys_wide <- read_excel(raw_data, sheet = "surveys") %>%
+  subset(SurveyID! = "N/A")
 
 # Pivot the table to wide format
-surveys <- melt(surveys_wide, measure.vars=c(30:203), 
-                variable.name="tree", value.name="bats")
+surveys <- melt(
+  surveys_wide, 
+  measure.vars  = c(30:203), 
+  variable.name = "tree", 
+  value.name    = "bats"
+)
 ```
 
   2. Merge surveys with coordinates for each tree
   3. Create `month` and `year` variables
 
-```{r, results='hide', warning=FALSE, message=FALSE}
+```{r, results = 'hide', warning = FALSE, message = FALSE}
 # Read in the tree-by-tree data
-trees <- read_excel(raw_data, sheet="trees") %>%
+trees <- read_excel(raw_data, sheet = "trees") %>%
   clean_names() %>%
-  mutate(tree=tree_id)
+  mutate(tree = tree_id)
 
 # Join survey and tree data
-surveys_trees <- left_join(surveys, trees, by="tree") %>%
+surveys_trees <- left_join(surveys, trees, by = "tree") %>%
   clean_names() %>%
-  subset(bats!=999) %>%
-  mutate(year=format(date, "%Y"),
-         month=format(date, "%b"), 
-         dates=format(date, "%d %b %y"))
+  subset(bats! = 999) %>%
+  mutate(
+    year  = format(date, "%Y"),
+    month = format(date, "%b"), 
+    dates = format(date, "%d %b %y")
+  )
 ```
 
  4. Get base layer from Google Maps
 
-```{r, results='hide', warning=FALSE, message=FALSE}
-map <- get_map(location=c(lon=149.131749, lat=-35.289492), 
-               zoom=19, source="google", 
-               maptype="roadmap", crop=FALSE)
+```{r, results = 'hide', warning = FALSE, message = FALSE}
+map <- get_map(
+  location = c(lon = 149.131749, lat = -35.289492), 
+  zoom     = 19, 
+  source   = "google", 
+  maptype  = "roadmap", 
+  crop     = FALSE
+)
 ```
 
   5. Order months
@@ -557,20 +1067,39 @@ map <- get_map(location=c(lon=149.131749, lat=-35.289492),
 ```{r}
 # Prepare the survey and tree data
 data <- surveys_trees %>%
+  
   # Format date column
-  mutate(date=as.Date(date, format=c("%d/%m/%Y"))) %>%
+  mutate(date = as.Date(date, format = c("%d/%m/%Y"))) %>%
+  
   # Select only dates during the current reporting period
   subset(date > START & date < END) %>%
-  mutate(month=factor(month, levels=c("Dec", "Jan", "Feb", "Mar", 
-                                      "Apr", "May", "Jun", "Jul", 
-                                      "Aug", "Sep", "Oct", "Nov")),
-         foxes=cut(as.numeric(bats), 
-                   breaks=c(-Inf, 50, 100, 200, 400, Inf), 
-                   labels=c("0-50", "50-100", "100-200", 
-                            "200-400", ">400"))) %>%
-  mutate(foxes=factor(foxes, levels=c(">400", "100-200", 
-                                      "200-400", "50-100", 
-                                      "0-50")))
+  
+  mutate(
+    month = factor(month, levels = c(
+      "Dec", "Jan", "Feb", 
+      "Mar", "Apr", "May", 
+      "Jun", "Jul", "Aug", 
+      "Sep", "Oct", "Nov"
+    )), 
+    
+    foxes    = cut(
+      as.numeric(bats), 
+      breaks = c(-Inf, 50, 100, 200, 400, Inf), 
+      labels = c(
+        "0-50", 
+        "50-100", 
+        "100-200", 
+        "200-400", 
+        ">400"
+      ))) %>%
+  
+  mutate(foxes = factor(foxes, levels = c(
+    ">400", 
+    "100-200", 
+    "200-400", 
+    "50-100", 
+    "0-50"
+  )))
 ```
 
   6. Map the number of `Bats` recorded per `Month`
@@ -578,203 +1107,235 @@ data <- surveys_trees %>%
 ```{r}
 # Plot density map
 density_map <- ggmap(map) + 
-  geom_point(data, mapping=aes(x=longitude, y=latitude), 
-             shape=8, col="darkgreen", size=1, alpha=0.2) +
-  geom_point(data, size=1, mapping=aes(x=longitude, y=latitude, 
-                                       col=as.numeric(bats), 
-                                       alpha=as.numeric(bats))) +
-  scale_colour_gradient2(low=0, midpoint=10, 
-                         mid="yellow", high="red") +
-  facet_wrap(~month, ncol=3) +
-  theme(axis.line=element_line(colour="darkgrey"), 
-        axis.text.x=element_blank(), 
-        axis.text.y=element_blank(),
-        axis.ticks.x=element_blank(),
-        axis.ticks.y=element_blank(),
-        axis.title.x=element_text(vjust=-2), 
-        axis.title.y=element_text(vjust=5, margin=margin(r=5)),
-        panel.grid=element_blank(),
-        panel.background=element_rect(fill="white", colour=NA), 
-        plot.margin=margin(t=-10, r=4, b=5, l=5), 
-        # Add a plot label 
-        plot.tag=element_text(size=12, face="bold", vjust=-5), 
-        legend.key=element_blank(), 
-        legend.text=element_text(size=8),
-        legend.title=element_blank(), 
-        strip.background=element_rect(fill="#1F2148"),
-        strip.text=element_text(colour="white")) + 
-  guides(col=guide_legend(title="Number of \nflying-foxes\nrecorded",
-                          reverse=TRUE), 
-         alpha=guide_legend(title="Number of \nflying-foxes\nrecorded",
-                            reverse=TRUE)) +
-  labs(x="", y="")
-
-
-# Display the plot
-print(density_map)
+  geom_point(
+    data, 
+    mapping = aes(x = longitude, y = latitude), 
+    alpha   = 0.2, 
+    col     = "darkgreen", 
+    shape   = 8, 
+    size    = 1
+  ) +
+  
+  geom_point(
+    data, 
+    size    = 1, 
+    mapping = aes(
+      alpha = as.numeric(bats), 
+      col   = as.numeric(bats), 
+      x     = longitude, 
+      y     = latitude
+    )) +
+  
+  facet_wrap(~month, ncol = 3) +
+  
+  guides(
+    alpha     = guide_legend(
+      title   = "Number of \nflying-foxes\nrecorded", 
+      reverse = TRUE
+    )
+    col       = guide_legend(
+      title   = "Number of \nflying-foxes\nrecorded", 
+      reverse = TRUE
+    )) +
+  
+  labs(x = "", y = "")
+  
+  scale_colour_gradient2(
+    low      = 0, 
+    midpoint = 10, 
+    mid      = "yellow", 
+    high     = "red"
+  ) +
+    
+  
+  theme(
+    axis.line        = element_line(colour = "darkgrey"), 
+    axis.text.x      = element_blank(), 
+    axis.text.y      = element_blank(),
+    axis.ticks.x     = element_blank(),
+    axis.ticks.y     = element_blank(),
+    axis.title.x     = element_text(vjust = -2), 
+    axis.title.y     = element_text(vjust = 5, margin = margin(r = 5)), 
+    legend.key       = element_blank(), 
+    legend.text      = element_text(size = 8),
+    legend.title     = element_blank(), 
+    panel.grid       = element_blank(),
+    panel.background = element_rect(fill = "white", colour = NA), 
+    plot.margin      = margin(t = -10, r = 4, b = 5, l = 5), 
+    
+    # Add a plot label 
+    plot.tag         = element_text(size = 12, face = "bold", vjust = -5), 
+    strip.background = element_rect(fill = "#1F2148"),
+    strip.text       = element_text(colour = "white")
+)
 ```
 
-```{r, include=FALSE}
+```{r, include = FALSE}
 # Save the plot as a jpeg file
-ggsave(plot=density_map, 
-       filename="output/fig 6 (density maps).jpeg",
-       height=3500, width=4000, units="px", dpi=800)
+ggsave(
+  filename = "output/fig 6 tree density maps.jpeg", 
+  plot     = density_map, 
+  height   = 3500, 
+  width    = 4000, 
+  units    = "px", 
+  dpi      = 800
+)
 ```
 
-## Occupation
+## Camp occupation
 
-Here we plot the dates that flying-foxes occupied the camp each year. Because the flying-foxes never vacated the camp in 2014, we entered back-to-back dates to enable plotting.
+Here we plot the dates that flying-foxes occupied the camp each year. Because the flying-foxes never vacated the camp in 2014, we entered back-to-back dates to enable plotting. 
 
 ```{r}
 # Read in dates of camp occupation
-occ <- read_excel(raw_data, sheet="occupation") %>%
+occ <- read_excel(raw_data, sheet = "occupation") %>%
   clean_names() %>%
+  
   # Exclude years with missing dates
   filter(!is.na(arrival) & !is.na(departure)) %>% 
-  mutate(across(c(peak_date, departure, arrival, 
-                  year_start, year_end), as.Date),
-         # Extract month and day and apply a single year
-         arr_date=as.Date(paste("2012", format(arrival, "%m-%d"), sep="-")),
-         dep_date=as.Date(paste("2012", format(departure, "%m-%d"), sep="-")),
-         peak_date=as.Date(paste("2012", format(peak_date, "%m-%d"), sep="-")),
-         # Treat year as a factor
-         year=factor(year),
-         # Make another year factor for a secondary y-axis
-         year_sec=as.numeric(as.character(year)))
+  mutate(across(c(
+    peak_date, 
+    departure, 
+    arrival, 
+    year_start, 
+    year_end), 
+  as.Date),
+         
+  # Extract month and day and apply a single year
+  arr_date  = as.Date(paste("2012", format(arrival,   "%m-%d"), sep = "-")),
+  dep_date  = as.Date(paste("2012", format(departure, "%m-%d"), sep = "-")),
+  peak_date = as.Date(paste("2012", format(peak_date, "%m-%d"), sep = "-")),
+  
+  # Treat year as a factor
+  year = factor(year),
+  
+  # Make another year factor for a secondary y-axis
+  year_sec = as.numeric(as.character(year)))
 ```
 
 ```{r}
 # Generate plot
-occ_plot <- ggplot(occ) +
-  geom_segment(aes(y=year_sec, yend=year_sec, 
-                   x=as.Date(format(year_start, "2012-%m-%d")),
-                   xend=as.Date(format(dep_date, "2012-%m-%d")),
-                   color=year), linewidth=2) +
-  geom_segment(aes(y=year_sec, yend=year_sec, 
-                   x=as.Date(format(arr_date, "2012-%m-%d")),
-                   xend=as.Date(format(year_end, "2012-%m-%d")),
-                   color=year), linewidth=2) +
-  geom_point(aes(x=as.Date(format(peak_date, "2012-%m-%d")), 
-                 y=year_sec, fill=year), shape=21, size=5, 
-             color="white", stroke=1.2, alpha=0.6) +
-  # Add departure date labels after the bar
-  geom_text(aes(x=as.Date(format(dep_date, "2012-%m-%d")) + 5, 
-                y=year_sec, label=format(dep_date, "%d %b")),
-            hjust=0, size=2.5, color="grey50") +
-  # Add arrival date labels before the bar
-  geom_text(aes(x=as.Date(format(arr_date, "2012-%m-%d")) - 5, 
-                y=year_sec, label=format(arr_date, "%d %b")),
-            hjust=1, size=2.5, color="grey50") +
-  scale_x_date(date_labels="%b", date_breaks="1 month",
-               limits=c(as.Date("2012-01-01"), 
-                        as.Date("2012-12-31"))) +
-  scale_color_viridis_d() + scale_fill_viridis_d() +
-  scale_y_continuous(name="Year", breaks=occ$year_sec, 
-                     labels=occ$year, sec.axis=sec_axis(~.,
-                     breaks=occ$year_sec, 
-                     labels=occ$peak_abundance, 
-                     name="Peak flying-fox abundance")) +
+(occ_plot <- ggplot(occ) +
+  geom_segment(
+    aes(
+      y       = year_sec, 
+      yend    = year_sec, 
+      x       = as.Date(format(year_start, "2012-%m-%d")),
+      xend    = as.Date(format(  dep_date, "2012-%m-%d")),
+      color   = year
+    ), 
+    linewidth = 2
+  ) +
+  
+  geom_segment(
+    aes(
+    color     = year, 
+    x         = as.Date(format(arr_date, "2012-%m-%d")),
+    xend      = as.Date(format(year_end, "2012-%m-%d")), 
+    y         = year_sec, yend = year_sec
+    ), 
+    linewidth = 2
+  ) +
+  
+  geom_point(
+    aes(
+      fill = year, 
+      x = as.Date(format(peak_date, "2012-%m-%d")), 
+      y = year_sec 
+    ), 
+    alpha  = 0.6, 
+    color  = "white", 
+    shape  = 21, 
+    size   = 5, 
+    stroke = 1.2
+  ) +
+ 
+   # Add departure date labels after the bar
+  geom_text(
+    aes(
+      label = format(dep_date, "%d %b"), 
+      x     = as.Date(format(dep_date, "2012-%m-%d")) + 5, 
+      y     = year_sec
+    ),
+    color   = "grey50", 
+    hjust   = 0, 
+    size    = 2.5
+  ) +
+ 
+   # Add arrival date labels before the bar
+  geom_text(
+    aes(
+      label = format(arr_date, "%d %b"), 
+      x     = as.Date(format(arr_date, "2012-%m-%d")) - 5, 
+      y     = year_sec
+    ),
+    color   = "grey50", 
+    hjust   = 1, 
+    size    = 2.5
+  ) +
+ 
+   scale_x_date(
+     date_labels = "%b", 
+     date_breaks = "1 month",
+     limits      = c(
+       as.Date("2012-01-01"), 
+       as.Date("2012-12-31")
+  )) +
+  
+  labs(x = "Month") + 
+  
+  scale_color_viridis_d() + 
+  scale_fill_viridis_d()  +
+  
+  scale_y_continuous(
+    name     = "Year", 
+    breaks   = occ$year_sec, 
+    labels   = occ$year, 
+    sec.axis = sec_axis(
+      ~., 
+      breaks = occ$year_sec, 
+      labels = occ$peak_abundance, 
+      name   = "Peak flying-fox abundance"
+  )) +
+  
   theme_minimal() +
-  theme(axis.line=element_line(colour="darkgrey"), 
-        axis.text.x=element_text(angle=0, hjust=1), 
-        axis.text.y=element_text(angle=0, hjust=1), 
-        axis.title.x=element_text(vjust=-2), 
-        axis.title.y=element_text(margin=margin(r=10)), 
-        axis.title.y.right=element_text(margin=margin(l=10)), 
-        legend.position="none", # "c(x, y)" or "none"
-        legend.text=element_text(size=8),
-        legend.title=element_blank(), 
-        panel.background=element_rect(fill="white", colour=NA), 
-        panel.grid=element_blank(),
-        plot.margin=margin(t=0, r=0, b=0, l=0), 
-        # Add a plot label 
-        plot.tag=element_text(size=12, face="bold", vjust=-5), 
-        strip.background=element_blank()) + 
-  labs(x="Month")
-
-# Display the plot
-print(occ_plot)
+  
+  theme(
+    axis.line          = element_line(colour = "darkgrey"), 
+    axis.text.x        = element_text(angle  = 0, hjust = 1), 
+    axis.text.y        = element_text(angle  = 0, hjust = 1), 
+    axis.title.x       = element_text(vjust  = -2), 
+    axis.title.y       = element_text(margin = margin(r = 10)), 
+    axis.title.y.right = element_text(margin = margin(l = 10)), 
+    legend.position    = "none", # "c(x, y)" or "none"
+    legend.text        = element_text(size = 8),
+    legend.title       = element_blank(), 
+    panel.background   = element_rect(fill = "white", colour = NA), 
+    panel.grid         = element_blank(),
+    plot.margin        = margin(t = 0, r = 0, b = 0, l = 0), 
+    
+    # Add a plot label 
+    plot.tag           = element_text(size = 12, face = "bold", vjust = -5), 
+    strip.background   = element_blank()
+  )
+)
 ```
 
-```{r, include=FALSE}
+```{r, include = FALSE}
 # Save the plot as a jpeg file
-ggsave(plot=occ_plot, 
-       filename="output/fig 7 (occupation barplot).jpeg",
-       height=3500, width=6000, units="px", dpi=800)
+ggsave(
+  filename = "output/fig 7 camp occupation barplot.jpeg",
+  plot     = occ_plot, 
+  height   = 3500, 
+  width    = 6000, 
+  units    = "px", 
+  dpi      = 800
+)
 ```
 
-# **Reproducibility and citation**
+# **Session information**
 
-## Session information
-
-```{r, eval=TRUE}
+```{r, eval = TRUE}
 # Display R version, OS, and loaded packages
 sessionInfo()
-```
-
-## Citation
-
-Finally, we define functions to extract metadata from this repository to generate a `citation.cff` file that can then be read and exported (e.g., via [GitHub](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files)). 
-
-```{r, eval=TRUE}
-# Define function to extract repo metadata
-extract_metadata <- function(rmd="analyses.Rmd") 
-  {if (!requireNamespace("yaml", quietly=TRUE)) stop("Please install the 'yaml' package.")
-   lines <- suppressWarnings(readLines(rmd))
-   yaml_start <- which(lines=="---")[1]
-   yaml_end <- which(lines=="---")[2]
-   yaml_block <- lines[yaml_start:yaml_end]
-   meta <- yaml::yaml.load(paste(yaml_block, collapse="\n"))
-   date_iso <- tryCatch(
-     as.character(as.Date(meta$date, format="%B %d, %Y")), 
-     error=function(e) meta$date)
-   repo <- tryCatch(system("git config --get remote.origin.url", intern=TRUE),
-                    error=function(e) "")
-   repo_url <- sub("git@github.com:", "https://github.com/", repo)
-   repo_url <- sub(".git$", "", repo_url)
-   list(title=meta$title,
-        author=meta$author,
-        date=date_iso,
-        repo=repo_url,
-        license="MIT")}
-
-# Define function to write a citation.cff file
-write_cff_from_rmd <- function(rmd="analyses.Rmd", 
-                               cff_path="metadata/citation.cff") 
-  {if (!requireNamespace("glue", quietly=TRUE)) stop("Please install the 'glue' package.")
-   meta <- extract_metadata(rmd)
-   cff <- glue::glue(
-     "cff-version: 1.2.0\n",
-     "message: \"If you use this code, please cite the following.\"\n",
-     "title: \"{meta$title}\"\n",
-     "authors:\n",
-     "  - name: {meta$author}\n",
-     "date-released: {meta$date}\n",
-     "repository-code: {meta$repo}\n",
-     "license: {meta$license}\n")
-   writeLines(cff, cff_path)
-   message(glue::glue("{cff_path} written"))}
-
-# Define function to print the citation details
-cite <- function(rmd="analyses.Rmd") 
-  {if (!requireNamespace("crayon", quietly=TRUE)) stop("Please install the 'crayon' package.")
-   if (!requireNamespace("glue", quietly=TRUE)) stop("Please install the 'glue' package.")
-   meta <- extract_metadata(rmd)
-   bold <- crayon::bold
-   citation <- glue::glue(
-     "\nIf you use this code, please cite the following:\n\n",
-     "{bold(glue::glue('{meta$author} ({substr(meta$date, 1, 4)})'))} {meta$title}. ",
-     "Coexistence Conservation Lab, Fenner School of Environment and Society, ",
-     "The Australian National University, Canberra.\n",
-     "{bold('Available at:')} {meta$repo}\n",
-     "{bold('Date released:')} {meta$date}\n",
-     "{bold('License:')} {meta$license}\n\n",
-     "For more information, visit https://www.coexistenceconservationlab.org/")
-   cat(citation)}
-
-# Create citation file quietly
-invisible(write_cff_from_rmd())
-
-# Print citation details
-cite()
 ```
