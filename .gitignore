@@ -23,6 +23,7 @@ desktop.ini
 Desktop.ini
 
 # Project-specific files to ignore
-/metadata/api.txt
+/metadata/google maps api.txt
+*api.txt
 *.accdb
 *.tif
