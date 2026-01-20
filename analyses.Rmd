@@ -160,6 +160,12 @@ REPORTING_PERIOD <- 2025
 
 # Define whether LRFFs were recorded in the last reporting period
 LRFFS_RECORDED   <- FALSE
+
+# Define visual scaling factor to align trees occupied with FF abundance
+TREE_SCALE       <- 20
+
+# Define visual scaling factor to align FF abundance with temperature
+FF_SCALE         <- 200
 ```
 
 ```{r}
@@ -183,7 +189,42 @@ monitoring_cols <- c(
   "ghff", 
   "lrff", 
   "trees_occupied", 
+  "mothers_and_pups", 
+  "heat_stress", 
+  "wind", 
+  "cloud", 
+  "humidity", 
+  "bat_noise", 
+  "other_noise", 
+  "rubbish", 
+  "humans", 
   "include"
+)
+
+# Define categorical variables
+cat_vars <- c(
+  "pups", 
+  "heat", 
+  "bat_noise", 
+  "other_noise", 
+  "humans", 
+  "rubbish", 
+  "cloud", 
+  "humid",
+  "wind"
+)
+
+# Define long labels for categorical variables
+cat_labs <- c(
+  "pups"        = "Presence of mothers and pups", 
+  "heat"        = "Heat stress behaviours", 
+  "bat_noise"   = "Flying-fox noise", 
+  "other_noise" = "Other noise", 
+  "humans"      = "Presence of humans", 
+  "rubbish"     = "Presence of litter", 
+  "cloud"       = "Cloud cover", 
+  "humid"       = "In situ humidity", 
+  "wind"        = "Wind strength"
 )
 ```
 
@@ -226,19 +267,9 @@ We entered the FF survey data in a [Microsoft Access](https://www.microsoft.com/
   1. Copy the `Survey` and `Tree` tables from the database into their respective sheets in `input/raw data.xlsx`. 
   2. Copy the rows from the last reporting period (Dec 1–Nov 30) in the `Schedule` sheet of the `ABS flying-fox monitoring` Google spreadsheet (requires specific access) to the bottom of the `monitoring` sheet.
 
-# **Plots**
-
-## Abundance and trees occupied
-
-First, we generate a **(a)** raw line graph and a **(b)** smoothed line graph by month, with two y-axes (Fig 3a):
-
-  1. **Primary axis:** GHFF and LRFF abundance over time (0–10,000)
-      - *Note: no LRFFs were recorded during the 2025 reporting period.*
-  2. **Secondary axis:** Number of trees occupied by FFs (0–160)
-
-```{r, results = 'hide', warning = FALSE, message = FALSE}
+```{r}
 # Read in data
-data <- read_excel(raw_data, sheet = "monitoring") %>% 
+dat <- read_excel(raw_data, sheet = "monitoring") %>% 
   # Standardise column names to lowercase with underscores
   clean_names() %>%
   # Select relevant columns
@@ -255,9 +286,24 @@ data <- read_excel(raw_data, sheet = "monitoring") %>%
   filter(
     include  == "Yes", 
     location == "Commonwealth Park"
-  ) %>%
+  ) 
+```
+
+
+# **Plots**
+
+## Abundance and trees occupied (Figure 2a)
+
+First, we generate a **(a)** raw line graph and a **(b)** smoothed line graph by month, with two y-axes:
+
+  1. **Primary axis:** GHFF and LRFF abundance over time (0–10,000)
+      - *Note: no LRFFs were recorded during the 2025 reporting period.*
+  2. **Secondary axis:** Number of trees occupied by FFs (0–160)
+
+```{r, results = 'hide', warning = FALSE, message = FALSE}
+# Pivot df to long format
+dat_wide <- dat %>%
   
-  # Pivot df to long format
   pivot_longer(
     cols      = c("ghff", "lrff"), 
     names_to  = "species", 
@@ -277,135 +323,154 @@ data <- read_excel(raw_data, sheet = "monitoring") %>%
   mutate(year = year(date))
 
 # Subset to current reporting period
-data_current <- data %>%
+dat_cur <- dat_wide %>%
   filter(date > START & date < END) %>%
   # Include LRFFs if LRFFS_RECORDED = TRUE 
   filter(LRFFS_RECORDED | species != "lrff")
 
 # Export df to a new sheet in the running workbook
-workbook <- export_sheet(data, sheet = "data")
+workbook <- export_sheet(dat_cur, sheet = "data")
 ```
 
-**Raw line graph**
+### Raw line graph
 
 ```{r}
 # Line plot raw abundance
-(abun_raw <- ggplot(data_current) +
+(abun_line <- ggplot(dat_cur) +
   
-  geom_line(
-    mapping   = aes(date, count, col = species), 
-    linewidth = 0.6
+  geom_ribbon(
+    aes(
+      x    = date,
+      ymin = 0,
+      ymax = trees_occupied * TREE_SCALE,
+      fill = "Trees occupied"
+    ),
+    alpha  = 0.25,
+    colour = NA,
+    na.rm  = TRUE
   ) +
-  
+   
   geom_line(
     mapping   = aes(
-      date, 
-      trees_occupied*50, 
-      col     = 'chartreuse4'), 
-    linewidth = 0.6
+      col     = "Trees occupied", 
+      x       = date, 
+      y       = trees_occupied * TREE_SCALE
+    ), 
+    linewidth = 0.7
+  ) +
+   
+  geom_ribbon(
+    aes(
+      x    = date,
+      ymin = 0,
+      ymax = count,
+      fill = "Flying-foxes recorded"
+    ),
+    alpha  = 0.25,
+    colour = NA
+  ) +
+   
+  geom_line(
+    mapping   = aes(
+      col     = "Flying-foxes recorded", 
+      x       = date, 
+      y       = count
+    ), 
+    linewidth = 0.7
   ) +
   
   labs(
-    x = "Month", 
-    y = "Flying-foxes recorded"
+    tag = "a", 
+    x   = "Month", 
+    y   = "Flying-foxes recorded"
   ) + 
   
   scale_color_manual(
-    name   = '', 
-    values = c("#CACBE8","#1F2148","#7B7FC7"), 
-    labels = c("Trees occupied", "Grey-headed flying-fox")
-  ) +
+  name   = "",
+  values = c(
+    "Trees occupied"        = "#458B00",
+    "Flying-foxes recorded" = "#7B7FC7"
+  )) + 
+ 
+  scale_fill_manual(
+  name   = "",
+  values = c(
+    "Trees occupied"        = "#458B00",
+    "Flying-foxes recorded" = "#7B7FC7"
+  )) + 
+   
   scale_x_date(
     date_breaks = "1 month", 
     date_labels = "%b"
   ) +
   scale_y_continuous(
-    breaks   = seq(0, 10000, 2000), 
-    sec.axis = sec_axis(~ ./50, name = "Trees occupied")
+    sec.axis = sec_axis(~ ./TREE_SCALE, name = "Trees occupied")
   ) + 
   
   theme_minimal() + 
-  
-  # 
   theme(
-    axis.line        = element_line(colour = "darkgrey"), 
-    axis.text.x      = element_text(
-      angle  = 0, 
-      vjust  = 1, 
-      hjust  = 0, 
-      colour = "black"
-    ),
-    axis.text.y      = element_text(
-      angle  = 0, 
-      vjust  = 0.5, 
-      colour = "black"
-    ), 
-    axis.title.x     = element_text(vjust = -2), 
-    axis.title.y     = element_text(
-      vjust  = 5, 
-      margin = margin(r = 5)
-    ),
-    legend.position  = "bottom", # "c(x, y)" or "none"
-    legend.title     = element_blank(), 
-    panel.background = element_rect(
-      fill   = "white", 
-      colour = NA
-    ), 
-    panel.grid       = element_blank(),
-    plot.margin      = margin(t = 0.2, r = 0.5, b = 0, l = 0.2, "cm"), 
-    
-    # Add a plot label
-    plot.tag         = element_text(
-      size  = 12, 
-      face  = "bold", 
-      vjust = -5
-    ), 
-    strip.background = element_blank()
+    axis.line         = element_line(colour = "darkgrey"), 
+    axis.text.x       = element_text(angle = 90, hjust = 1, vjust = 1),
+    axis.text.y       = element_text(vjust = 0.5), 
+    axis.title.x      = element_blank(), 
+    axis.title.y      = element_text(vjust = 2, margin = margin(r = 1)),
+    legend.position   = "bottom", 
+    legend.title      = element_blank(), 
+    panel.background  = element_rect(fill = "white", colour = NA), 
+    panel.grid        = element_blank(),
+    plot.margin       = margin(t = 0.2, r = 0.5, b = -0.2, l = 0.1, "cm"), 
+    plot.tag          = element_text(face = "bold", size = 12), 
+    plot.tag.position = c(0.8, 0.98)
   )
 )
 ```
 
-**Smoothed line graph**
+### Smoothed line graph
 
 ```{r}
 # Smooth plot abundance
-(abun_smooth <- ggplot(data_current) +
+(abun_smooth <- ggplot(dat_cur) + 
+   
   geom_smooth(
     mapping   = aes(
-      col     = species, 
-      count, 
-      date, 
-      fill    = species
+      col     = "Flying-foxes recorded", 
+      fill    = "Flying-foxes recorded", 
+      x       = date, 
+      y       = count
     ), 
-    linewidth = 0.6
+    linewidth = 0.7
   ) +
   
   geom_smooth(
     mapping   = aes(
-      col     = 'chartreuse4', 
-      date, 
-      fill    = 'chartreuse4', 
-      trees_occupied * 50
+      col     = "Trees occupied", 
+      fill    = "Trees occupied", 
+      x       =  date, 
+      y       =  trees_occupied * TREE_SCALE
     ), 
-    linewidth = 0.6
+    linewidth = 0.7, 
+    na.rm     = TRUE
   ) + 
   
   labs(
-    x = "Month", 
-    y = "Flying-foxes recorded"
-  )
+    tag = "b", 
+    x   = "Month", 
+    y   = "Flying-foxes recorded"
+  ) + 
 
   scale_color_manual(
-    labels = c("Trees occupied", "Grey-headed flying-fox"), 
-    name   = '', 
-    values = c("#CACBE8","#1F2148","#7B7FC7")
-  ) +
-    
+  name   = "",
+  values = c(
+    "Trees occupied"        = "#458B00",
+    "Flying-foxes recorded" = "#7B7FC7"
+  )) + 
+ 
   scale_fill_manual(
-    labels = c("Trees occupied", "Grey-headed flying-fox"), 
-    name   = '', 
-    values = c("#CACBE8","#1F2148","#7B7FC7")
-  ) + 
+  name   = "",
+  values = c(
+    "Trees occupied"        = "#458B00",
+    "Flying-foxes recorded" = "#7B7FC7"
+  )) + 
     
   scale_x_date(
     date_breaks = "1 month", 
@@ -413,96 +478,33 @@ workbook <- export_sheet(data, sheet = "data")
   ) +
     
   scale_y_continuous(
-    breaks   = seq(0, 10000, 2000), 
-    sec.axis = sec_axis(~ ./50, name = "Trees occupied")
-  )
+    sec.axis = sec_axis(~ ./TREE_SCALE, name = "Trees occupied")
+  ) + 
   
   theme_minimal() +
-  
   theme(
-    axis.line        = element_line(colour = "darkgrey"), 
-    axis.text.x      = element_text(
-      angle = 0, 
-      colour = "black", 
-      hjust = 0, 
-      vjust = 1
-    ),
-    axis.text.y      = element_text(
-      angle = 0, 
-      colour = "black", 
-      vjust = 0.5
-    ),
-    axis.title.x     = element_text(vjust = -2), 
-    axis.title.y     = element_text(vjust = 5, margin = margin(r = 5)),
-    legend.text      = element_text(size  = 8),
-    legend.position  = c(0.75, 0.25), # "c(x, y)" or "none"
-    legend.title     = element_blank(),
-    panel.background = element_rect(fill = "white", colour = NA), 
-    panel.grid.major = element_blank(), 
-    panel.grid.minor = element_blank(), 
-    panel.border     = element_blank(),
-    
-    # Add space to the left for combined plot
-    plot.margin      = margin(t = 0.2, r = 0.1, b = 0, l = 0.5, "cm"), 
-    
-    # Add a plot label
-    plot.tag         = element_text(size = 12, face = "bold", vjust = -5), 
-    strip.background = element_blank()
+    axis.line         = element_line(colour = "darkgrey"), 
+    axis.text.x       = element_text(angle = 90, hjust = 1, vjust = 1),
+    axis.text.y       = element_text(vjust = 0.5),
+    axis.title.x      = element_blank(), 
+    axis.title.y      = element_text(vjust = 2, margin = margin(r = 1)),
+    legend.text       = element_text(size  = 8),
+    legend.position   = "bottom", 
+    legend.title      = element_blank(),
+    panel.background  = element_rect(fill = "white", colour = NA), 
+    panel.border      = element_blank(),
+    panel.grid.major  = element_blank(), 
+    panel.grid.minor  = element_blank(), 
+    plot.margin       = margin(t = 0.2, r = 0.1, b = -0.2, l = 0.1, "cm"), 
+    plot.tag          = element_text(face = "bold", size = 12), 
+    plot.tag.position = c(0.8, 0.98)
   )
 )
-
-# Display the plot
-print(abun_smooth)
 ```
 
-```{r}
-# Create a light grey dividing line as an empty plot
-divider <- ggplot() +
-  
-  # Add the dividing line
-  geom_vline(
-    color      = "black", 
-    size       = 0.5, 
-    xintercept = 0
-  ) +
-  
-  # Extend the line infinitely in the y-direction
-  ylim(-Inf, Inf) +
-  theme_void()
+## Mean abundance per month (Figure 2b)
 
-# Combine plots into a single figure
-abun_current <- ggarrange(
-  abun_raw, 
-  divider, 
-  abun_smooth, 
-  ncol    = 3, 
-  nrow    = 1, 
-  labels  = c("a", "", "b"), 
-  label.x = 0.8, 
-  label.y = 0.98, 
-  widths  = c(1, 0.02, 1), 
-  align   = "h"
-)
-
-# Display plot
-print(abun_current)
-```
-
-```{r, eval = FALSE, include = FALSE}
-# Export plot as a jpeg file
-ggsave(
-  filename = "output/fig 3a abundance.jpeg",
-  plot     = abun_current, 
-  height   = 100, 
-  width    = 250, 
-  units    = "mm", 
-  dpi      = 800
-)
-```
-
-## Mean abundance per month
-
-Bar graph with month on the x-axis and FF abundance on the y-axis, showing the following as separate bars with standard error bars (Fig 3b): 
+Bar graph with month on the x-axis and FF abundance on the y-axis, showing the following as separate bars with standard error bars: 
 
   1. Mean (±SE) FFs recorded (primary axis ranging 0–6,000)
   2. Mean (±SE) trees occupied (secondary axis ranging 0–140)
@@ -510,18 +512,11 @@ Bar graph with month on the x-axis and FF abundance on the y-axis, showing the f
 
 For the purposes of plotting the mean number of trees occupied and tree-by-bat ratio on a secondary axis, we multiplied these values by 40, then reversed this before plotting.
 
+### Data preparation
+
 ```{r}
 # Read in the data
-data_current <- read_excel(raw_data, sheet = "monitoring") %>% 
-  clean_names() %>% 
-  
-  filter(
-    include == "Yes", 
-    location == "Commonwealth Park"
-  ) %>% 
-  
-  mutate(year = year(date)) %>% 
-  subset(date > START & date < END) %>% 
+dat_cur2 <- dat_cur %>%
   
   mutate(
     month      = lubridate::month(
@@ -529,22 +524,20 @@ data_current <- read_excel(raw_data, sheet = "monitoring") %>%
       label    = TRUE, 
       abbr     = TRUE
     ), 
-    ghff       = as.numeric(ghff), 
-    lrff       = as.numeric(lrff), 
-    bats_total = ghff + lrff, 
-    ratio      = as.numeric(bats_total / trees_occupied)
+    count      = as.numeric(count), 
+    ratio      = as.numeric(count / trees_occupied)
   ) %>% 
   
   mutate(ratio = ifelse(ratio == "NaN", 0, ratio)) 
 
 # Calculate mean statistics
-data_current_means <- data_current %>% 
+dat_cur_mean <- dat_cur2 %>% 
   group_by(month) %>% 
   
   summarise(
-    count_mean = mean(bats_total),
-    ratio_mean = 40 * mean(ratio),
-    trees_mean = 40 * mean(trees_occupied)
+    count_mean = mean(count),
+    ratio_mean = TREE_SCALE * mean(ratio),
+    trees_mean = TREE_SCALE * mean(trees_occupied)
   ) %>%
   
   pivot_longer(
@@ -554,13 +547,18 @@ data_current_means <- data_current %>%
   )
 
 # Calculate standard error (SE) statistics
-data_current_se <- data_current %>% 
+dat_cur_se <- dat_cur2 %>% 
   group_by(month) %>% 
   
   summarise(
-    count_se = sd(bats_total) / sqrt(length(bats_total)),
-    ratio_se = 40 * sd(ratio) / sqrt(length(ratio)),
-    trees_se = 40 * sd(trees_occupied) / sqrt(length(trees_occupied))) %>%
+    count_se = sd(count) / 
+      sqrt(length(count)),
+    
+    ratio_se = TREE_SCALE * sd(ratio) / 
+      sqrt(length(ratio)),
+    
+    trees_se = TREE_SCALE * sd(trees_occupied) / 
+      sqrt(length(trees_occupied))) %>%
   
   pivot_longer(
     2:4, 
@@ -569,15 +567,15 @@ data_current_se <- data_current %>%
   )
 
 # Combine means and SE
-data_current_stats <- cbind(
-  data_current_means, 
-  data_current_se
+dat_cur_stats <- cbind(
+  dat_cur_mean, 
+  dat_cur_se
 )
 
-colnames(data_current_stats) <- make.unique(names(data_current_stats))
+colnames(dat_cur_stats) <- make.unique(names(dat_cur_stats))
 ```
 
-So each month plots regardless of whether FFs were detected, manually generate rows for these months.
+For each month, regardless of whether FFs were detected, manually generate rows for these months.
 
 ```{r}
 # Manually create rows for months where bats were not detected
@@ -635,8 +633,8 @@ names(sep) <- c(
 )
 
 # Combine rows with df
-data_current_stats <- rbind(
-  data_current_stats, 
+dat_current_stats <- rbind(
+  dat_cur_stats, 
   jul, 
   aug, 
   sep
@@ -662,139 +660,149 @@ data_current_stats <- rbind(
 )
 
 # Reverse × 40 multiplier
-data_current_stats$true <- data_current_stats$mean/40 
+dat_cur_stats$true <- dat_cur_stats$mean/TREE_SCALE 
+
+# Create a three-level grouping variable for metrics
+dat_cur_stats <- dat_cur_stats %>%
+  mutate(metric = sub("_(mean|se)$", "", type))
 ```
+
+### Plot
 
 ```{r}
 # Generate barplot
-(mean_se_plot <- ggplot(
+(abun_mean <- ggplot(
   
-  data_current_stats, 
+  dat_cur_stats, 
   aes(
-    fill = type, 
+    fill = metric, 
     x    = month, 
     y    = mean
   )) +
   
-  geom_bar(
-    position = "dodge", 
-    stat     = "identity"
-  ) + 
+  geom_col(position = "dodge") + 
   
   geom_errorbar(
     mapping = aes(
-      col   = type, 
+      col   = metric, 
       x     = month, 
-      ymax  = mean+se, 
-      ymin  = mean-se
+      ymax  = mean + se, 
+      ymin  = mean - se
     ), 
     position = "dodge"
   ) + 
   
-  facet_wrap(
-    ~group, 
-    scales = "free"
-  ) +
-  
   labs(
-    x = "Month", 
-    y = "Mean flying-fox abundance"
-  )
+    tag = "c", 
+    x   = "Month", 
+    y   = "Mean flying-fox abundance"
+  ) + 
  
   scale_colour_manual(
-    name   = '', 
-    guide  = "none", 
-    values = c("#CACBE8","#7B7FC7","#1F2148")
-  ) +
-    
+  name    = "", 
+  breaks  = c("count", "trees", "ratio"), 
+  guide   = "none", 
+  labels  = c(
+    "Mean flying-fox abundance",
+    "Mean trees occupied",
+    "Mean ratio of flying-fox to trees"),
+  values  = c(
+    count = "#51549E", 
+    trees = "#A1CC76", 
+    ratio = "#C4A487")
+  ) + 
+   
   scale_fill_manual(
-    name   = '', 
-    labels = c(
-      "Mean flying-fox abundance", 
-      "Mean trees occupied", 
-      "Mean ratio of flying-fox to trees"), 
-    values = c("#1F2148","#CACBE8","#7B7FC7")
-  ) +
-    
+  name   = "", 
+  breaks = c("count", "trees", "ratio"),
+  labels = c(
+    "Mean flying-fox abundance",
+    "Mean trees occupied",
+    "Mean ratio of flying-fox to trees"),
+  values  = c(
+    count = "#1F2148",
+    trees = "#458B00", 
+    ratio = "#8B6B4F")
+  ) + 
+   
   scale_y_continuous(
     sec.axis = sec_axis(
-      ~ ./40, 
+      ~ ./TREE_SCALE, 
       name = "Mean trees occupied and \nmean ratio of flying-fox to trees")
-  )
+  ) + 
    
   theme_minimal() + 
   
   theme(
-    axis.line        = element_line(colour = "darkgrey"), 
-    axis.text.x      = element_text(
-      angle  = 0, 
-      colour = "black", 
-      hjust  = 0, 
-      vjust  = 1
-    ),
-    axis.text.y      = element_text(
-      angle  = 0, 
-      colour = "black", 
-      vjust  = 0.5
-    ),
-    axis.title.x     = element_text(vjust = -2), 
-    axis.title.y     = element_text(
-      margin = margin(r = 5), 
-      vjust  = 5
-    ), 
-    legend.position  = "bottom", # "c(x, y)" or "none"
-    legend.text      = element_text(size = 8),
-    legend.title     = element_blank(),
-    panel.background = element_rect(
-      colour = NA, 
-      fill   = "white"
-    ), 
-    panel.grid.major = element_blank(), 
-    panel.grid.minor = element_blank(), 
-        
-    panel.border     = element_blank(),
-    plot.margin      = margin(0.5, 0, 0, 0, "cm"), 
-    
-    # Add a plot label 
-    plot.tag         = element_text(
-      face  = "bold", 
-      size  = 12, 
-      vjust = -5
-    ), 
-    strip.background = element_blank()
+    axis.line         = element_line(colour = "darkgrey"), 
+    axis.text.x       = element_text(vjust = 1),
+    axis.text.y       = element_text(vjust = 0.5),
+    axis.title.x      = element_blank(), 
+    axis.title.y      = element_text(vjust = 3, margin = margin(r = 1)), 
+    legend.position   = "bottom", 
+    legend.text       = element_text(size = 8),
+    legend.title      = element_blank(),
+    panel.background  = element_rect(colour = NA, fill = "white"), 
+    panel.grid.major  = element_blank(), 
+    panel.grid.minor  = element_blank(), 
+    panel.border      = element_blank(),
+    plot.margin       = margin(t = 0.5, r = 0.1, b = -0.2, l = 0.3, "cm"), 
+    plot.tag          = element_text(face = "bold", size = 12), 
+    plot.tag.position = c(0.88, 0.98)
   )
 )
 ```
 
-## Mean abundance per year
+### Combine plots
 
-Stacked bar graph for 2012-23 with year on the x-axis and FF abundance on the y-axis (Fig 4), showing:
+```{r, eval = FALSE, include = FALSE}
+# Combine plots into a single figure
+(abun_raw <- ggarrange(
+  abun_line, 
+  abun_smooth, 
+  ncol    = 2, 
+  nrow    = 1, 
+  widths  = c(1, 1), 
+  align   = "h"
+))
+
+# Combine plots into a single figure
+(abun_plots <- ggarrange(
+  abun_raw, 
+  abun_mean, 
+  ncol     = 1, 
+  heights  = c(1, 1)
+))
+
+# Export plot as a jpeg file
+ggsave(
+  filename = "output/fig 2 current abundance.jpeg",
+  plot     = abun_plots, 
+  height   = 140, 
+  width    = 200, 
+  units    = "mm", 
+  dpi      = 600
+)
+```
+
+## Mean abundance per year (Figure 3)
+
+Annual distribution of flying-fox abundance between 2012–current, showing:
 
   1. Peak (maximum) FFs recorded for each year
   2. Mean FFs recorded for each year
 
+### Data preparation
+
 ```{r}
 # Prepare the data
-data <- read_excel(raw_data, sheet = "monitoring") %>%
-  clean_names() %>%
-  drop_na(ghff)%>%
+dat_all <- dat %>%
+  drop_na(ghff) %>%
   
-  filter(
-    include  == "Yes", 
-    location == "Commonwealth Park"
-  ) %>%
-  
-  mutate(ghff = if_else(
-    ghff == "800-1000", 
-    "900", 
-    ghff)
-  ) %>%
+  mutate(ghff = if_else(ghff == "800-1000", "900", ghff)) %>%
   
   # Replace ranges with mean
-  mutate(ghff = if_else(
-    ghff      == "200-250", 
-    "225", 
-    ghff)
+  mutate(ghff = if_else(ghff == "200-250",  "225", ghff)
   ) %>% 
   
   mutate(
@@ -805,122 +813,133 @@ data <- read_excel(raw_data, sheet = "monitoring") %>%
   
   mutate(bats_total = ghff + lrff) %>%
   
-  # Remove years prior to year 2000
-  filter(year > 2000)
-
-# Subset to peak abundances for each year
-peak <- data %>% 
+  # Remove years prior to year 2011
+  filter(year > 2011) %>%
+  
+  # Calculate peak abundance
   group_by(year) %>%
-  
-  summarise(
-    bats_mean = mean(bats_total), 
-    bats_max  = max(bats_total)
-  ) %>%
-  
-  mutate(bats_diff = bats_max-bats_mean) %>%
-  
-  pivot_longer(
-    2:4, 
-    names_to   = "type", 
-    values_to  = "stat"
-  ) %>%
-  
-  filter(type! = "bats_max")
+  mutate(peak = max(bats_total, na.rm = TRUE)) %>%
+  ungroup()
 ```
 
 ```{r}
 # Bar plot
-(abun_years <- ggplot(peak, (aes(year, stat, fill = type))) +
-  geom_bar(stat = "identity") + 
-  
+(abun_year <- ggplot(dat_all, (aes(x = factor(year), y = bats_total))) + 
+    
+  # Draw violin plot 
+  geom_violin(
+    aes(col  = peak, 
+        fill = peak), 
+    alpha    = 0.9, 
+    lwd      = 0.6, 
+    na.rm    = TRUE, 
+    scale    = "width", 
+    width    = 0.8
+  ) + 
+
+  # Draw boxplot 
+  geom_boxplot(
+    col           = "white", 
+    fill          = "white", 
+    lwd           = 0.5, 
+    na.rm         = TRUE, 
+    outlier.shape = NA, 
+    width         = 0.05
+  ) + 
+
+  # Remove white ticks on legend scale
+  guides(fill = guide_colorbar(ticks.colour = NA)) + 
+    
   labs(
     x = "Year", 
     y = "Flying-fox abundance"
-  ) +
+  ) + 
   
-  scale_fill_manual(
-    labels = c("Peak", "Mean"), 
-    name   = "", 
-    values = c("#1F2148","#CACBE8")
-  ) +
+  scale_colour_gradientn(
+    colours        = c("#CACBE8", "#7B7FC7", "#000333"), 
+    guide          = guide_colorbar(
+      barheight    = unit(3, "cm"), 
+      barwidth     = unit(0.5, "cm")
+    ), 
+    name           = "Peak"
+  ) + 
+    
+  scale_fill_gradientn(
+    colours        = c("#CACBE8", "#7B7FC7", "#000333"), 
+    guide          = guide_colorbar(
+      barheight    = unit(3, "cm"), 
+      barwidth     = unit(0.5, "cm")
+    ), 
+    name           = "Peak"
+  ) + 
   
-  scale_x_continuous(
-    breaks = seq(2011, REPORTING_PERIOD, 1)) + 
-  scale_y_continuous(
-    breaks = seq(0, 10000, 2000))
+  scale_x_discrete(
+    drop = FALSE, 
+    breaks = seq(2011, REPORTING_PERIOD, 1)
+  ) + 
+    
+  scale_y_continuous(breaks = seq(0, 10000, 2000)) + 
   
-  theme_minimal() +
-  
+  # Define median value point for boxplot
+  stat_summary(
+    col    = mono4, 
+    fill   = white, 
+    fun    = "median", 
+    geom   = "point", 
+    shape  = 21, 
+    size   = 1.7, 
+    stroke = 1
+  ) + 
+    
+   # Apply visual theme
+  theme_minimal() + 
   theme(
     axis.line        = element_line(colour = "darkgrey"), 
-    axis.text.x      = element_text(angle = 0, hjust = 0, vjust = 0.5),
-    axis.title.y     = element_text(
-      angle  = 0, 
-      hjust  = 0, 
-      margin = margin(r = 5), 
-      vjust  = 0.5
-    ),
-    
-    legend.position  = "bottom", # "c(x, y)" or "none"
-    legend.text      = element_text(size = 8),
-    legend.title     = element_blank(), 
+    axis.text.x      = element_text(vjust  = 0.5),
+    axis.title.x     = element_blank(), 
+    axis.title.y     = element_text(margin = margin(r = 5), vjust = 0.5),
+    legend.position  = c(0.07, 0.7), 
+    legend.text      = element_text(size = 8), 
+    legend.title     = element_text(face = "bold", size = 8), 
     panel.background = element_rect(fill = "white", colour = NA), 
     panel.border     = element_blank(),
     panel.grid.major = element_blank(), 
     panel.grid.minor = element_blank(), 
-    plot.margin      = margin(0.5, 0, 0, 0, "cm"),
-    
-    # Add a plot label 
-    plot.tag         = element_text(size = 12, face = "bold", vjust = -5),
-    plot.title       = element_text(
-      face   = "bold", 
-      margin = margin(10, 0, 10, 0), 
-      size   = 15
-    ), 
-    strip.background = element_blank()
+    plot.margin      = margin(t = -0.2, r = 0, b = 0, l = 0, "cm")
   ) 
 )
-
-# Display the plot
-print(abun_years)
 ```
 
 ```{r, include = FALSE}
-# Save plot as a jpeg
-jpeg(
-  file   = "output/fig 4 abundance per year.jpeg", 
-  height = 2500, 
-  width  = 6000, 
-  units  = "px", 
-  res    = 800
+# Export plot as a jpeg file
+ggsave(
+  filename = "output/fig 3 annual abundance.jpeg",
+  plot     = abun_year, 
+  height   = 80, 
+  width    = 200, 
+  units    = "mm", 
+  dpi      = 600
 )
-
-print(abun_years)
-dev.off()
 ```
 
-## Abundance and temperature
+## Abundance and temperature (Figure 4)
 
 Here we overlay a line graph of FF abundance since 2012 with maximum and minimum temperature (Fig 5) from the [Australian Bureau of Meteorology](http://www.bom.gov.au/climate/data/index.shtml?bookmark = 136) (navigate to `ACT` > `Past weather` > `Data and graphs` > `Text search` > `Temperature` > `Maximum temperature` or `Minimum temperature` > weather station `70351`). 
+
+### Data preparation
 
 ```{r}
 # Read in weather data
 weather <- read_excel(raw_data, sheet = "weather") %>%
   clean_names() %>% 
   filter(year > 2011) %>%
-  
   rename(
-    max = "max_temperature_degree_c", 
-    min = "min_temperature_degree_c"
+    max = "max_temperature_c", 
+    min = "min_temperature_c"
   ) %>%
   
-  mutate(date = paste(
-    year, 
-    month, 
-    day, 
-    sep = "/"
-  )) %>%
-  
+  # Format date
+  mutate(date = paste(year, month, day, sep = "/")) %>%
   mutate(date = as.Date(date, format = c("%Y/%m/%d")))
 
 # Pivot to long format
@@ -932,92 +951,94 @@ weather_long <- pivot_longer(
 )
 ```
 
+### Plot
+
 ```{r}
-# Generate ribbon and line plot
+# Draw ribbon and line plot
 (survey_weather_plot <- ggplot() +
+   
   geom_ribbon(
-    data   = weather, 
+    data = weather,
     aes(
-      as.Date(date), 
-      ymin = min, 
-      ymax = max
-    ), 
-    alpha  = 0.5, 
-    fill   = "#CACBE8"
+      x    = as.Date(date),
+      ymin = min * FF_SCALE,
+      ymax = max * FF_SCALE
+    ),
+    alpha = 0.7,
+    fill  = "#CACBE8"
   ) +
-  
+   
   geom_line(
-    data = data, 
+    data = dat_all,
     aes(
-      as.Date(date), 
-      bats_total/200), 
-    col  = "#1F2148", 
-    size = 0.6
+      x = as.Date(date),
+      y = bats_total
+    ),
+    colour   = "#1F2148",
+    linewidth = 0.6
   ) +
-  
+   
   scale_x_date(
-    name        = "Year", 
-    date_labels = "%Y", 
+    name        = "Year",
+    date_labels = "%Y",
     date_breaks = "2 years"
   ) +
-  
+   
   scale_y_continuous(
-    name     = "Daily temperature (°C)", 
+    name     = "Flying-fox abundance",
+    breaks   = seq(0, 10000, 2000), 
     sec.axis = sec_axis(
-      ~ .*200, 
-      breaks = seq(0, 10000, 2000),
-      name   = "Flying-fox abundance")
-  )
+      ~ . / FF_SCALE,
+      name = "Daily temperature (°C)"
+    )
+  ) +
   
+  # Apply visual theme
   theme_minimal() +
   theme(
-    axis.line        = element_line(colour = "darkgrey"), 
-    axis.text.x      = element_text(hjust = 0, vjust = 1),
-    axis.text.y      = element_text(hjust = 0, vjust = 0.5), 
-    axis.title.x     = element_text(vjust = -2), 
-    axis.title.y     = element_text(vjust = 5, margin = margin(r = 5)),
-    legend.position  = "bottom", # "c(x, y)" or "none"
-    legend.text      = element_text(size = 8),
-    legend.title     = element_blank(), 
-    panel.background = element_rect(fill = "white", colour = NA), 
+    axis.line        = element_line(colour = "darkgrey"),
+    axis.text.x      = element_text(vjust  = 1),
+    axis.text.y      = element_text(vjust  = 0.5),
+    axis.title.x     = element_blank(),
+    axis.title.y     = element_text(vjust  = 1),
+    legend.position  = "bottom",
+    legend.text      = element_text(size   = 8),
+    legend.title     = element_blank(),
+    panel.background = element_rect(colour = NA, fill = "white"),
     panel.border     = element_blank(),
-    panel.grid.major = element_blank(), 
-    panel.grid.minor = element_blank(), 
-    plot.margin      = margin(t = 0.5, r = 0, b = 0, l = 0, "cm"), 
-    
-    # Add a plot label 
-    plot.tag         = element_text(size = 12, face = "bold", vjust = -5), 
-    strip.background = element_blank()
-  ) 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.margin      = margin(t = -0.3, r = 0, b = 0, l = 0, "cm")
+  )
 )
 ```
 
 ```{r, include = FALSE}
-# Save plot as a jpeg
-jpeg(
-  file   = "output/fig 5 abundance and temperature.jpeg", 
-  height = 2500, 
-  width  = 6000, 
-  units  = "px", 
-  res    = 800
+# Export plot as a jpeg file
+ggsave(
+  filename = "output/fig 4 abundance by temperature.jpeg",
+  plot     = survey_weather_plot, 
+  height   = 80, 
+  width    = 200, 
+  units    = "mm", 
+  dpi      = 600
 )
-
-print(survey_weather_plot)
-dev.off()
 ```
 
-## Density maps
+## Density maps (Figure 5)
 
 Here we map the density of FFs in each tree across the camp (Fig 6). `surveys_wide` is from the `surveys` table in the database, and `trees` is from the `trees` table. 
 
 Because we didn't do any surveys in June and July, but want them to appear in our figure, *you will need to add dummy surveys for these months* into the `surveys` dataframe. You can do this by copying the row for Aug 22, 2020 (where all the trees have 0 bats) several times for each missing month per year, and changing the date to one that occurs in each missing month (e.g., Jun 1, 2020 for June). 
+
+### Data preparation
 
   1. Convert tree columns from wide format (one per column) to long format (tree identities listed in one column).
 
 ```{r}
 # Read in data
 surveys_wide <- read_excel(raw_data, sheet = "surveys") %>%
-  subset(SurveyID! = "N/A")
+  subset(SurveyID != "N/A")
 
 # Pivot the table to wide format
 surveys <- melt(
@@ -1040,7 +1061,7 @@ trees <- read_excel(raw_data, sheet = "trees") %>%
 # Join survey and tree data
 surveys_trees <- left_join(surveys, trees, by = "tree") %>%
   clean_names() %>%
-  subset(bats! = 999) %>%
+  subset(bats != 999) %>%
   mutate(
     year  = format(date, "%Y"),
     month = format(date, "%b"), 
@@ -1051,6 +1072,7 @@ surveys_trees <- left_join(surveys, trees, by = "tree") %>%
  4. Get base layer from Google Maps
 
 ```{r, results = 'hide', warning = FALSE, message = FALSE}
+# Fetch Google basemap
 map <- get_map(
   location = c(lon = 149.131749, lat = -35.289492), 
   zoom     = 19, 
@@ -1102,6 +1124,8 @@ data <- surveys_trees %>%
   )))
 ```
 
+### Plot
+
   6. Map the number of `Bats` recorded per `Month`
 
 ```{r}
@@ -1131,23 +1155,22 @@ density_map <- ggmap(map) +
   guides(
     alpha     = guide_legend(
       title   = "Number of \nflying-foxes\nrecorded", 
-      reverse = TRUE
-    )
+      reverse = TRUE), 
     col       = guide_legend(
       title   = "Number of \nflying-foxes\nrecorded", 
-      reverse = TRUE
-    )) +
+      reverse = TRUE)
+    ) +
   
-  labs(x = "", y = "")
+  labs(x = "", y = "") + 
   
   scale_colour_gradient2(
     low      = 0, 
     midpoint = 10, 
     mid      = "yellow", 
     high     = "red"
-  ) +
+  ) + 
     
-  
+  # Apply visual theme
   theme(
     axis.line        = element_line(colour = "darkgrey"), 
     axis.text.x      = element_blank(), 
@@ -1158,19 +1181,19 @@ density_map <- ggmap(map) +
     axis.title.y     = element_text(vjust = 5, margin = margin(r = 5)), 
     legend.key       = element_blank(), 
     legend.text      = element_text(size = 8),
-    legend.title     = element_blank(), 
+    legend.title     = element_text(size = 10), 
     panel.grid       = element_blank(),
     panel.background = element_rect(fill = "white", colour = NA), 
     plot.margin      = margin(t = -10, r = 4, b = 5, l = 5), 
-    
-    # Add a plot label 
-    plot.tag         = element_text(size = 12, face = "bold", vjust = -5), 
-    strip.background = element_rect(fill = "#1F2148"),
+    strip.background = element_rect(fill   = "#1F2148"),
     strip.text       = element_text(colour = "white")
-)
+  )
+
+# Display map
+# print(density_map)
 ```
 
-```{r, include = FALSE}
+```{r, include = FALSE, eval = FALSE}
 # Save the plot as a jpeg file
 ggsave(
   filename = "output/fig 6 tree density maps.jpeg", 
@@ -1182,9 +1205,11 @@ ggsave(
 )
 ```
 
-## Camp occupation
+## Camp occupation (Figure 6)
 
 Here we plot the dates that flying-foxes occupied the camp each year. Because the flying-foxes never vacated the camp in 2014, we entered back-to-back dates to enable plotting. 
+
+### Data preparation
 
 ```{r}
 # Read in dates of camp occupation
@@ -1213,16 +1238,18 @@ occ <- read_excel(raw_data, sheet = "occupation") %>%
   year_sec = as.numeric(as.character(year)))
 ```
 
+### Plot
+
 ```{r}
 # Generate plot
 (occ_plot <- ggplot(occ) +
   geom_segment(
     aes(
+      color   = year, 
       y       = year_sec, 
       yend    = year_sec, 
       x       = as.Date(format(year_start, "2012-%m-%d")),
-      xend    = as.Date(format(  dep_date, "2012-%m-%d")),
-      color   = year
+      xend    = as.Date(format(  dep_date, "2012-%m-%d"))
     ), 
     linewidth = 2
   ) +
@@ -1283,10 +1310,8 @@ occ <- read_excel(raw_data, sheet = "occupation") %>%
   )) +
   
   labs(x = "Month") + 
-  
   scale_color_viridis_d() + 
-  scale_fill_viridis_d()  +
-  
+  scale_fill_viridis_d() + 
   scale_y_continuous(
     name     = "Year", 
     breaks   = occ$year_sec, 
@@ -1298,25 +1323,21 @@ occ <- read_excel(raw_data, sheet = "occupation") %>%
       name   = "Peak flying-fox abundance"
   )) +
   
+  # Apply visual theme
   theme_minimal() +
-  
   theme(
     axis.line          = element_line(colour = "darkgrey"), 
-    axis.text.x        = element_text(angle  = 0, hjust = 1), 
-    axis.text.y        = element_text(angle  = 0, hjust = 1), 
-    axis.title.x       = element_text(vjust  = -2), 
+    axis.text.x        = element_text(hjust = 1), 
+    axis.text.y        = element_text(hjust = 1), 
+    axis.title.x       = element_blank(), 
     axis.title.y       = element_text(margin = margin(r = 10)), 
     axis.title.y.right = element_text(margin = margin(l = 10)), 
-    legend.position    = "none", # "c(x, y)" or "none"
+    legend.position    = "none", 
     legend.text        = element_text(size = 8),
     legend.title       = element_blank(), 
     panel.background   = element_rect(fill = "white", colour = NA), 
     panel.grid         = element_blank(),
-    plot.margin        = margin(t = 0, r = 0, b = 0, l = 0), 
-    
-    # Add a plot label 
-    plot.tag           = element_text(size = 12, face = "bold", vjust = -5), 
-    strip.background   = element_blank()
+    plot.margin        = margin(t = 0, r = 0, b = 0, l = 0)
   )
 )
 ```
@@ -1324,12 +1345,154 @@ occ <- read_excel(raw_data, sheet = "occupation") %>%
 ```{r, include = FALSE}
 # Save the plot as a jpeg file
 ggsave(
-  filename = "output/fig 7 camp occupation barplot.jpeg",
+  filename = "output/fig 6 occupation.jpeg",
   plot     = occ_plot, 
   height   = 3500, 
   width    = 6000, 
   units    = "px", 
   dpi      = 800
+)
+```
+
+## Categorical variables (Figure 7)
+
+### Data preparation
+
+```{r}
+# Prepare levels counts for categorical variables
+dat_cat <- dat_cur %>%
+  
+  # Remove estimates
+  filter(survey == "Count") %>%
+  
+  # Rename categorical variables
+  rename(
+    heat  = heat_stress, 
+    humid = humidity, 
+    pups  = mothers_and_pups
+  ) %>%
+  
+  # Format month
+  mutate(month = floor_date(date, "month")) %>%
+  
+  # Transform to long format
+  pivot_longer(
+    cols      = all_of(cat_vars),
+    names_to  = "var",
+    values_to = "level"
+  ) %>%
+  
+  # Remove NAs
+  filter(!is.na(level), level != "") %>%
+  
+  # Sum levels per variable
+  count(month, var, level)
+```
+
+### Plot
+
+```{r}
+# Barplot categorical variables
+cat_plots <- dat_cat %>%
+  
+  # Group by categorical variable
+  split(.$var) %>%
+    purrr::map(~ {
+      v <- unique(.x$var)
+
+    ggplot(.x, aes(x = month, y = n, fill = level)) +
+      
+      # Draw bar plot
+      geom_col() +
+      
+      # Define labels
+      labs(
+        fill  = "",
+        title = cat_labs[[v]], 
+        x     = "Month",
+        y     = "Frequency"
+      ) +
+      
+      # Define fill colours
+      scale_fill_manual(
+        values = c(
+          "#2C2F69", 
+          "#8E92DE", 
+          "#A1CC76", 
+          "#C4A487" 
+      )) +
+      
+      # Define date axis
+      scale_x_date(
+        date_labels = "%b",
+        date_breaks = "1 month",
+        expand      = c(0, 0)
+      ) +
+      
+      # Apply visual theme
+      theme_minimal() +
+      theme(
+        axis.line        = element_line(colour = "darkgrey"),
+        axis.text.x      = element_text(angle  = 90, vjust = 1),
+        axis.text.y      = element_text(vjust  = 0.5),
+        axis.title.x     = element_blank(),
+        axis.title.y     = element_text(vjust  = 3, margin = margin(r = 1)),
+        legend.position  = "bottom",
+        legend.text      = element_text(size   = 9),
+        legend.title     = element_blank(),
+        panel.background = element_rect(colour = NA, fill = "white"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border     = element_blank(),
+        plot.margin      = margin(t = 0.4, r = 0.5, b = 0.5, l = 0.5, "cm"), 
+        plot.title       = element_text(face = "bold", hjust = 0.5, size = 12)
+      )
+  }
+)
+
+# Display plots
+print(cat_plots$pups)
+print(cat_plots$heat)
+print(cat_plots$bat_noise)
+print(cat_plots$other_noise)
+print(cat_plots$rubbish)
+print(cat_plots$humans)
+print(cat_plots$cloud)
+print(cat_plots$humid)
+print(cat_plots$wind)
+```
+
+```{r, include = FALSE}
+# Reorder plots
+cat_plots <- cat_plots[c(
+  "pups",
+  "heat",
+  "bat_noise",
+  "other_noise",
+  "humans",
+  "rubbish",
+  "cloud",
+  "humid",
+  "wind"
+)]
+
+# Combine plots
+(cat_plots_comb <- ggarrange(
+  plotlist      = cat_plots,
+  ncol          = 3,
+  nrow          = ceiling(length(cat_plots) / 3), 
+  common.legend = FALSE
+  )
+)
+
+# Export plot as a jpeg file
+ggsave(
+  filename = "output/fig 5 categories.jpeg",
+  plot     = cat_plots_comb, 
+  height   = 200, 
+  width    = 350, 
+  units    = "mm", 
+  dpi      = 600
 )
 ```
 
