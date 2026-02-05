@@ -27,10 +27,7 @@ This [R project](https://support.posit.co/hc/en-us/articles/200526207-Using-RStu
 
 ```{r global-options, echo = FALSE}
 # Set default knitting options 
-knitr::opts_chunk$set(
-  echo = TRUE, 
-  eval = TRUE
-)
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE)
 
 # Set chunk behaviours (e.g., chunks with 'draft = TRUE' will not run)
 knit <- list(
@@ -56,78 +53,146 @@ knit <- list(
 
 # Define hook functions based on knit list
 knitr::opts_hooks$set(
+  
+  # Disable evaluation for `draft = TRUE` chunks
   draft = function(options) {
     if (isTRUE(options$draft)) {
-      options$eval <- FALSE
-    }
-    options
-  }
-)
+      options$eval <- FALSE}
+    options},
+  
+  # Apply predefined setup defaults to `setup = TRUE` chunks
+  setup = function(options) {
+    if (isTRUE(options$setup)) {
+      options <- knitr::merge_lists(options, knit$setup)}
+    options},
+  
+  # Show code only (hide results) for `echo_only = TRUE` chunks
+  echo_only = function(options) {
+    if (isTRUE(options$echo_only)) {
+      options <- knitr::merge_lists(options, knit$echo_only)
+      options$results <- "hide"}
+    options},
+  
+  # Apply predefined function defaults to `fun = TRUE` chunks
+  fun = function(options) {
+    if (isTRUE(options$fun)) {
+      options <- knitr::merge_lists(options, knit$fun)}
+    options})
 ```
 
 ## Initialise project
 
 To initialise your project, load the function below then run `run_setup()`. 
 
-Depending on how many packages need installing, it may take a while. Feel free to have a look through `setup.Rmd` so you're familiar with the setup. 
+Depending on how many packages need installing, it may take a while. Feel free to have a look through `setup.Rmd` to become familiar with the setup. 
 
 ```{r, setup = TRUE}
 # Define setup function
 run_setup <- function(path = "setup.Rmd", total = 3) {
+  # Ensure `cli` is available, and install if not
   if (!requireNamespace("cli", quietly = TRUE)) {
     install.packages("cli")}
   library(cli)
-
-  # Progress bar
+  
+  # Initialise progress bar
   cli_progress_bar("Initialising setup", total = total)
 
+  # Ensure knitr output directory is set 
   if (is.null(knitr::opts_knit$get("output.dir"))) {
     knitr::opts_knit$set(output.dir = getwd())}
   cli_progress_update(set = 2)
 
+  # Branch behaviour depending on whether `knitr` is currently running
   if (isTRUE(getOption("knitr.in.progress"))) {
-    # During knitting → include setup.Rmd inline 
-    # (respects chunk options + text)
-    invisible(knitr::knit_child(
-      path, 
-      quiet = TRUE, 
-      envir = knitr::knit_global()))
+    # If knitting, include `setup.Rmd` inline (`knitr` handles options)
+    invisible(
+      knitr::knit_child(path, quiet = TRUE, envir = knitr::knit_global()))
   } else {
     
-    # Interactive use → inline helper to extract & eval code blocks
-    extract_r_code <- function(file) {
+    # If running interactively, evaluate chunks and selectively silence
+    run_rmd_chunks <- function(file, envir = globalenv()) {
+      
+      # Read file and locate chunk fences
       lines  <- readLines(file, warn = FALSE)
       starts <- grep("^```\\{r", lines)
       ends   <- grep("^```\\s*$", lines)
-      blocks <- mapply(
-        function(s, e) {
-          header <- lines[s]
-          code <- lines[(s + 1):(e - 1)]
-          # Skip if eval = FALSE
-          if (grepl("eval\\s* = \\s*FALSE", header)) return(NULL)
-          code
-        },
-        starts, 
-        ends,
-        SIMPLIFY = FALSE
-      )
-      paste(unlist(blocks), collapse = "\n")
-    }
+      
+      # Exit early if no R chunks are found
+      if (length(starts) == 0L) {return(invisible(NULL))}
 
-    code <- extract_r_code(path)
-    eval(parse(text = code), envir = globalenv())
-  }
+      # Pair each chunk start with the next closing fence after it
+      end_for_start <- vapply(
+        starts, function(s) {
+          e <- ends[ends > s][1]
+          if (is.na(e)) stop("Unclosed chunk fence in: ", file, call. = FALSE)
+          e}, integer(1))
 
+      # Iterate over chunks in file order
+      for (i in seq_along(starts)) {
+        s <- starts[[i]]
+        e <- end_for_start[[i]]
+
+        # Extract chunk header and body
+        header <- lines[[s]]
+        code   <- lines[(s + 1):(e - 1)]
+
+        # Parse chunk options using `knitr` parser
+        params_txt <- sub("^```\\{r\\s*", "", header)
+        params_txt <- sub("\\}\\s*$", "", params_txt)
+        opts       <- knitr:::parse_params(params_txt)
+
+        # # Respect `eval = FALSE`
+        eval_it <- if (!is.null(opts$eval)) isTRUE(opts$eval) else TRUE
+        if (!eval_it) next
+
+        # Resolve knitr-style output controls
+        include_it   <- if (!is.null(opts$include)) isTRUE(opts$include) else TRUE
+        results_hide <- identical(opts$results, "hide")
+        message_show <- if (!is.null(opts$message)) isTRUE(opts$message) else TRUE
+        warning_show <- if (!is.null(opts$warning)) isTRUE(opts$warning) else TRUE
+
+        # Silence `setup = TRUE` chunks
+        setup_quiet <- isTRUE(opts$setup)
+
+        # Decide whether printed output should be captured
+        capture_results <- setup_quiet || !include_it || results_hide
+
+        # Evaluate chunk with the requested suppression
+        expr     <- parse(text = paste(code, collapse = "\n"))
+        eval_one <- function() eval(expr, envir = envir)
+        wrapped  <- eval_one
+
+        # Suppress warnings when requested or for setup chunks
+        if (!warning_show || setup_quiet) {
+          wrapped <- local({f <- wrapped
+            function() suppressWarnings(f())})}
+
+        # Suppress messages when requested or for setup chunks
+        if (!message_show || setup_quiet) {
+          wrapped <- local({f <- wrapped
+            function() suppressMessages(f())})}
+
+        # Execute chunk, optionally capturing printed output
+        if (capture_results) {
+          invisible(capture.output(wrapped()))
+        } else {wrapped()}}
+      invisible(NULL)}
+    
+    # Execute chunk, optionally capturing printed output
+    run_rmd_chunks(path, envir = globalenv())}
+  
+  # Finalise progress bar and report status
   cli_progress_update(set = 3)
   cli_progress_done()
-  cli_alert_success("Setup successful!")
-}
+  cli_alert_success("Setup successful!")}
 ```
 
 ```{r}
 # Run setup 
 run_setup()
 ```
+
+## Load project-specific packages
 
 ## Load project-specific packages
 
@@ -148,15 +213,23 @@ This chunk tabulates the abbreviations used in our workflows.
 ```{r, draft = TRUE}
 # Read in abbrevations list and print it as a clean table
 (def <- print_clean_table(raw_data, sheet = "definitions"))
+
+# Read in factor labels and levels
+#get_labs()
 ```
 
 ### Constants
+
+#### Project
 
 ```{r}
 # Define dates for current reporting period
 START            <- "2024-12-01"
 END              <- "2025-11-30"
 REPORTING_PERIOD <- 2025
+
+# Define date for the beginning of FF monitoring
+BEGIN            <- "2012-01-01"
 
 # Define whether LRFFs were recorded in the last reporting period
 LRFFS_RECORDED   <- FALSE
@@ -166,7 +239,13 @@ TREE_SCALE       <- 20
 
 # Define visual scaling factor to align FF abundance with temperature
 FF_SCALE         <- 200
+
+# Define visual scaling factors for ENSO Niño3.4 values 
+ENSO_NEUT        <- 0.8
+ENSO_ADJ         <- 4000
 ```
+
+#### Maps
 
 ```{r}
 # Define constant ggplot arguments
@@ -176,6 +255,8 @@ plot_height <- 6
 plot_width  <- 9
 dpi         <- 300
 ```
+
+#### Levels
 
 ```{r}
 # Define columns in `monitoring` sheet
@@ -198,8 +279,7 @@ monitoring_cols <- c(
   "other_noise", 
   "rubbish", 
   "humans", 
-  "include"
-)
+  "include")
 
 # Define categorical variables
 cat_vars <- c(
@@ -211,8 +291,7 @@ cat_vars <- c(
   "rubbish", 
   "cloud", 
   "humid",
-  "wind"
-)
+  "wind")
 
 # Define long labels for categorical variables
 cat_labs <- c(
@@ -224,8 +303,26 @@ cat_labs <- c(
   "rubbish"     = "Presence of litter", 
   "cloud"       = "Cloud cover", 
   "humid"       = "In situ humidity", 
-  "wind"        = "Wind strength"
-)
+  "wind"        = "Wind strength")
+```
+
+#### Colours
+
+```{r}
+# Define and load project-specific colours as objects
+list2env(
+  list(
+    powder = "#CACBE8", 
+    lilac  = "#6B6FD6", 
+    purple = "#1F2148", 
+    pine   = "#2F5D50",
+    green  = "#458B00",
+    lime   = "#A1CC76", 
+    olive  = "#7A8F5B", 
+    tan    = "#C4A487", 
+    brown  = "#8B6B4F", 
+    orange = "#D36C2A"), 
+  envir    = globalenv()) 
 ```
 
 ### Functions
@@ -235,29 +332,24 @@ cat_labs <- c(
 to_hms <- function(x) {
   # Leave hms values unchanged
   if (inherits(x, "hms")) {
-    return(x)
-  }
+    return(x)}
 
   # Extract time-of-day from POSIXct/POSIXlt datetimes
   if (inherits(x, "POSIXt")) {
-    return(hms::as_hms(as.numeric(x) %% 86400))
-  }
+    return(hms::as_hms(as.numeric(x) %% 86400))}
 
   # Convert difftime durations to seconds
   if (inherits(x, "difftime")) {
-    return(hms::as_hms(as.numeric(x, units = "secs")))
-  }
+    return(hms::as_hms(as.numeric(x, units = "secs")))}
 
   # Handle numeric Excel times by keeping the fractional day
   if (is.numeric(x)) {
     frac_day <- x %% 1
-    return(hms::as_hms(frac_day * 86400))
-  }
+    return(hms::as_hms(frac_day * 86400))}
 
   # Parse character times and treat blanks as missing
   x_chr <- na_if(trimws(as.character(x)), "")
-  hms::as_hms(readr::parse_time(x_chr, format = "%H:%M"))
-}
+  hms::as_hms(readr::parse_time(x_chr, format = "%H:%M"))}
 ```
 
 # **Data preparation**
@@ -270,29 +362,29 @@ We entered the FF survey data in a [Microsoft Access](https://www.microsoft.com/
 ```{r}
 # Read in data
 dat <- read_excel(raw_data, sheet = "monitoring") %>% 
-  # Standardise column names to lowercase with underscores
+  
+  # Standardise column names
   clean_names() %>%
+  
   # Select relevant columns
   select(all_of(monitoring_cols)) %>%
+  
   # Convert columns
   mutate(
     # Convert dates and times
     across(c(start, finish, hours), to_hms), 
     ghff = as.character(ghff), 
-    lrff = as.character(lrff)
-  ) %>%
+    lrff = as.character(lrff)) %>%
   
   # Filter to relevant site
   filter(
     include  == "Yes", 
-    location == "Commonwealth Park"
-  ) 
+    location == "Commonwealth Park") 
 ```
-
 
 # **Plots**
 
-## Abundance and trees occupied (Figure 2a)
+## Abundance and trees occupied
 
 First, we generate a **(a)** raw line graph and a **(b)** smoothed line graph by month, with two y-axes:
 
@@ -307,8 +399,7 @@ dat_wide <- dat %>%
   pivot_longer(
     cols      = c("ghff", "lrff"), 
     names_to  = "species", 
-    values_to = "count"
-  ) %>%
+    values_to = "count") %>%
   
   # Convert count values
   mutate(count = if_else(count == "800-1000", "900", count)) %>%
@@ -318,8 +409,7 @@ dat_wide <- dat %>%
   mutate(
     count          = as.numeric(count),
     trees_occupied = as.numeric(trees_occupied),
-    date           = as.Date(date, format = c("%d/%m/%Y"))
-  ) %>%
+    date           = as.Date(date, format = c("%d/%m/%Y"))) %>%
   mutate(year = year(date))
 
 # Subset to current reporting period
@@ -330,6 +420,8 @@ dat_cur <- dat_wide %>%
 
 # Export df to a new sheet in the running workbook
 workbook <- export_sheet(dat_cur, sheet = "data")
+
+View(dat_wide)
 ```
 
 ### Raw line graph
@@ -343,86 +435,72 @@ workbook <- export_sheet(dat_cur, sheet = "data")
       x    = date,
       ymin = 0,
       ymax = trees_occupied * TREE_SCALE,
-      fill = "Trees occupied"
-    ),
+      fill = "Trees occupied"),
     alpha  = 0.25,
     colour = NA,
-    na.rm  = TRUE
-  ) +
+    na.rm  = TRUE) +
    
   geom_line(
     mapping   = aes(
       col     = "Trees occupied", 
       x       = date, 
-      y       = trees_occupied * TREE_SCALE
-    ), 
-    linewidth = 0.7
-  ) +
+      y       = trees_occupied * TREE_SCALE), 
+    linewidth = 0.7) +
    
   geom_ribbon(
     aes(
       x    = date,
       ymin = 0,
       ymax = count,
-      fill = "Flying-foxes recorded"
-    ),
+      fill = "Flying-foxes recorded"),
     alpha  = 0.25,
-    colour = NA
-  ) +
+    colour = NA) +
    
   geom_line(
     mapping   = aes(
       col     = "Flying-foxes recorded", 
       x       = date, 
-      y       = count
-    ), 
-    linewidth = 0.7
-  ) +
+      y       = count), 
+    linewidth = 0.7) +
   
   labs(
     tag = "a", 
     x   = "Month", 
-    y   = "Flying-foxes recorded"
-  ) + 
+    y   = "Flying-foxes recorded") + 
   
   scale_color_manual(
   name   = "",
   values = c(
-    "Trees occupied"        = "#458B00",
-    "Flying-foxes recorded" = "#7B7FC7"
-  )) + 
+    "Trees occupied"        = green,
+    "Flying-foxes recorded" = lilac)) + 
  
   scale_fill_manual(
   name   = "",
   values = c(
-    "Trees occupied"        = "#458B00",
-    "Flying-foxes recorded" = "#7B7FC7"
-  )) + 
+    "Trees occupied"        = green,
+    "Flying-foxes recorded" = lilac)) + 
    
   scale_x_date(
     date_breaks = "1 month", 
-    date_labels = "%b"
-  ) +
+    date_labels = "%b") +
+   
   scale_y_continuous(
-    sec.axis = sec_axis(~ ./TREE_SCALE, name = "Trees occupied")
-  ) + 
+    sec.axis = sec_axis(~ ./TREE_SCALE, name = "Trees occupied")) + 
   
   theme_minimal() + 
   theme(
-    axis.line         = element_line(colour = "darkgrey"), 
+    axis.line         = element_line(colour = mono3), 
     axis.text.x       = element_text(angle = 90, hjust = 1, vjust = 1),
     axis.text.y       = element_text(vjust = 0.5), 
     axis.title.x      = element_blank(), 
     axis.title.y      = element_text(vjust = 2, margin = margin(r = 1)),
     legend.position   = "bottom", 
     legend.title      = element_blank(), 
-    panel.background  = element_rect(fill = "white", colour = NA), 
+    panel.background  = element_rect(fill = white, colour = NA), 
     panel.grid        = element_blank(),
     plot.margin       = margin(t = 0.2, r = 0.5, b = -0.2, l = 0.1, "cm"), 
     plot.tag          = element_text(face = "bold", size = 12), 
-    plot.tag.position = c(0.8, 0.98)
-  )
-)
+    plot.tag.position = c(0.8, 0.98)))
 ```
 
 ### Smoothed line graph
@@ -436,54 +514,45 @@ workbook <- export_sheet(dat_cur, sheet = "data")
       col     = "Flying-foxes recorded", 
       fill    = "Flying-foxes recorded", 
       x       = date, 
-      y       = count
-    ), 
-    linewidth = 0.7
-  ) +
+      y       = count), 
+    linewidth = 0.7) +
   
   geom_smooth(
     mapping   = aes(
       col     = "Trees occupied", 
       fill    = "Trees occupied", 
       x       =  date, 
-      y       =  trees_occupied * TREE_SCALE
-    ), 
+      y       =  trees_occupied * TREE_SCALE), 
     linewidth = 0.7, 
-    na.rm     = TRUE
-  ) + 
+    na.rm     = TRUE) + 
   
   labs(
     tag = "b", 
     x   = "Month", 
-    y   = "Flying-foxes recorded"
-  ) + 
+    y   = "Flying-foxes recorded") + 
 
   scale_color_manual(
   name   = "",
   values = c(
-    "Trees occupied"        = "#458B00",
-    "Flying-foxes recorded" = "#7B7FC7"
-  )) + 
+    "Trees occupied"        = green,
+    "Flying-foxes recorded" = lilac)) + 
  
   scale_fill_manual(
   name   = "",
   values = c(
-    "Trees occupied"        = "#458B00",
-    "Flying-foxes recorded" = "#7B7FC7"
-  )) + 
+    "Trees occupied"        = green,
+    "Flying-foxes recorded" = lilac)) + 
     
   scale_x_date(
     date_breaks = "1 month", 
-    date_labels = "%b"
-  ) +
+    date_labels = "%b") +
     
   scale_y_continuous(
-    sec.axis = sec_axis(~ ./TREE_SCALE, name = "Trees occupied")
-  ) + 
+    sec.axis = sec_axis(~ ./TREE_SCALE, name = "Trees occupied")) + 
   
   theme_minimal() +
   theme(
-    axis.line         = element_line(colour = "darkgrey"), 
+    axis.line         = element_line(colour = mono3), 
     axis.text.x       = element_text(angle = 90, hjust = 1, vjust = 1),
     axis.text.y       = element_text(vjust = 0.5),
     axis.title.x      = element_blank(), 
@@ -491,18 +560,16 @@ workbook <- export_sheet(dat_cur, sheet = "data")
     legend.text       = element_text(size  = 8),
     legend.position   = "bottom", 
     legend.title      = element_blank(),
-    panel.background  = element_rect(fill = "white", colour = NA), 
+    panel.background  = element_rect(fill = white, colour = NA), 
     panel.border      = element_blank(),
     panel.grid.major  = element_blank(), 
     panel.grid.minor  = element_blank(), 
     plot.margin       = margin(t = 0.2, r = 0.1, b = -0.2, l = 0.1, "cm"), 
     plot.tag          = element_text(face = "bold", size = 12), 
-    plot.tag.position = c(0.8, 0.98)
-  )
-)
+    plot.tag.position = c(0.8, 0.98)))
 ```
 
-## Mean abundance per month (Figure 2b)
+## Mean abundance per month
 
 Bar graph with month on the x-axis and FF abundance on the y-axis, showing the following as separate bars with standard error bars: 
 
@@ -512,7 +579,7 @@ Bar graph with month on the x-axis and FF abundance on the y-axis, showing the f
 
 For the purposes of plotting the mean number of trees occupied and tree-by-bat ratio on a secondary axis, we multiplied these values by 40, then reversed this before plotting.
 
-### Data preparation
+### Import
 
 ```{r}
 # Read in the data
@@ -522,11 +589,9 @@ dat_cur2 <- dat_cur %>%
     month      = lubridate::month(
       date, 
       label    = TRUE, 
-      abbr     = TRUE
-    ), 
+      abbr     = TRUE), 
     count      = as.numeric(count), 
-    ratio      = as.numeric(count / trees_occupied)
-  ) %>% 
+    ratio      = as.numeric(count / trees_occupied)) %>% 
   
   mutate(ratio = ifelse(ratio == "NaN", 0, ratio)) 
 
@@ -537,14 +602,12 @@ dat_cur_mean <- dat_cur2 %>%
   summarise(
     count_mean = mean(count),
     ratio_mean = TREE_SCALE * mean(ratio),
-    trees_mean = TREE_SCALE * mean(trees_occupied)
-  ) %>%
+    trees_mean = TREE_SCALE * mean(trees_occupied)) %>%
   
   pivot_longer(
     2:4, 
     names_to = "type", 
-    values_to = "mean"
-  )
+    values_to = "mean")
 
 # Calculate standard error (SE) statistics
 dat_cur_se <- dat_cur2 %>% 
@@ -563,14 +626,12 @@ dat_cur_se <- dat_cur2 %>%
   pivot_longer(
     2:4, 
     names_to  = "type", 
-    values_to = "se"
-  )
+    values_to = "se")
 
 # Combine means and SE
 dat_cur_stats <- cbind(
   dat_cur_mean, 
-  dat_cur_se
-)
+  dat_cur_se)
 
 colnames(dat_cur_stats) <- make.unique(names(dat_cur_stats))
 ```
@@ -585,8 +646,7 @@ jul <- data.frame(
   NA, 
   "Jul", 
   "count_se", 
-  NA
-)
+  NA)
 
 names(jul) <- c(
   "month", 
@@ -594,8 +654,7 @@ names(jul) <- c(
   "mean", 
   "month.1", 
   "type.1", 
-  "se"
-)
+  "se")
 
 aug <- data.frame(
   "Aug", 
@@ -603,8 +662,7 @@ aug <- data.frame(
   NA, 
   "Aug", 
   "count_se", 
-  NA
-)
+  NA)
 
 names(aug) <- c(
   "month", 
@@ -612,8 +670,7 @@ names(aug) <- c(
   "mean", 
   "month.1", 
   "type.1", 
-  "se"
-)
+  "se")
 
 sep <- data.frame(
   "Sep", 
@@ -629,16 +686,14 @@ names(sep) <- c(
   "mean", 
   "month.1", 
   "type.1", 
-  "se"
-)
+  "se")
 
 # Combine rows with df
 dat_current_stats <- rbind(
   dat_cur_stats, 
   jul, 
   aug, 
-  sep
-  ) %>%
+  sep) %>%
   
   mutate(
     type = factor(type, levels = c(
@@ -647,17 +702,13 @@ dat_current_stats <- rbind(
       "ratio_mean", 
       "count_se", 
       "trees_se", 
-      "ratio_se"
-    )),
+      "ratio_se")),
     
     month = factor(month, levels = c(
       "Dec", "Jan", "Feb", 
       "Mar", "Apr", "May", 
       "Jun", "Jul", "Aug", 
-      "Sep", "Oct", "Nov"
-    )
-  )
-)
+      "Sep", "Oct", "Nov")))
 
 # Reverse × 40 multiplier
 dat_cur_stats$true <- dat_cur_stats$mean/TREE_SCALE 
@@ -672,32 +723,30 @@ dat_cur_stats <- dat_cur_stats %>%
 ```{r}
 # Generate barplot
 (abun_mean <- ggplot(
-  
   dat_cur_stats, 
   aes(
     fill = metric, 
     x    = month, 
-    y    = mean
-  )) +
+    y    = mean)) +
   
+  # Draw barplot
   geom_col(position = "dodge") + 
   
+  # Draw errorbars
   geom_errorbar(
     mapping = aes(
       col   = metric, 
       x     = month, 
       ymax  = mean + se, 
-      ymin  = mean - se
-    ), 
-    position = "dodge"
-  ) + 
+      ymin  = mean - se), 
+    position = "dodge") + 
   
   labs(
     tag = "c", 
     x   = "Month", 
-    y   = "Mean flying-fox abundance"
-  ) + 
+    y   = "Mean flying-fox abundance") + 
  
+  # Configure axes
   scale_colour_manual(
   name    = "", 
   breaks  = c("count", "trees", "ratio"), 
@@ -707,10 +756,9 @@ dat_cur_stats <- dat_cur_stats %>%
     "Mean trees occupied",
     "Mean ratio of flying-fox to trees"),
   values  = c(
-    count = "#51549E", 
-    trees = "#A1CC76", 
-    ratio = "#C4A487")
-  ) + 
+    count = lilac, 
+    trees = lime, 
+    ratio = tan)) + 
    
   scale_fill_manual(
   name   = "", 
@@ -720,21 +768,19 @@ dat_cur_stats <- dat_cur_stats %>%
     "Mean trees occupied",
     "Mean ratio of flying-fox to trees"),
   values  = c(
-    count = "#1F2148",
-    trees = "#458B00", 
-    ratio = "#8B6B4F")
-  ) + 
+    count = purple,
+    trees = green, 
+    ratio = brown)) + 
    
   scale_y_continuous(
     sec.axis = sec_axis(
       ~ ./TREE_SCALE, 
-      name = "Mean trees occupied and \nmean ratio of flying-fox to trees")
-  ) + 
+      name = "Mean trees occupied and \nmean ratio of flying-fox to trees")) + 
    
+  # Apply visual theme
   theme_minimal() + 
-  
   theme(
-    axis.line         = element_line(colour = "darkgrey"), 
+    axis.line         = element_line(colour = mono3), 
     axis.text.x       = element_text(vjust = 1),
     axis.text.y       = element_text(vjust = 0.5),
     axis.title.x      = element_blank(), 
@@ -742,15 +788,13 @@ dat_cur_stats <- dat_cur_stats %>%
     legend.position   = "bottom", 
     legend.text       = element_text(size = 8),
     legend.title      = element_blank(),
-    panel.background  = element_rect(colour = NA, fill = "white"), 
+    panel.background  = element_rect(colour = NA, fill = white), 
     panel.grid.major  = element_blank(), 
     panel.grid.minor  = element_blank(), 
     panel.border      = element_blank(),
     plot.margin       = margin(t = 0.5, r = 0.1, b = -0.2, l = 0.3, "cm"), 
     plot.tag          = element_text(face = "bold", size = 12), 
-    plot.tag.position = c(0.88, 0.98)
-  )
-)
+    plot.tag.position = c(0.88, 0.98)))
 ```
 
 ### Combine plots
@@ -763,36 +807,33 @@ dat_cur_stats <- dat_cur_stats %>%
   ncol    = 2, 
   nrow    = 1, 
   widths  = c(1, 1), 
-  align   = "h"
-))
+  align   = "h"))
 
 # Combine plots into a single figure
 (abun_plots <- ggarrange(
   abun_raw, 
   abun_mean, 
   ncol     = 1, 
-  heights  = c(1, 1)
-))
+  heights  = c(1, 1)))
 
 # Export plot as a jpeg file
 ggsave(
-  filename = "output/fig 2 current abundance.jpeg",
+  filename = "output/current abundance.jpeg",
   plot     = abun_plots, 
   height   = 140, 
   width    = 200, 
   units    = "mm", 
-  dpi      = 600
-)
+  dpi      = 600)
 ```
 
-## Mean abundance per year (Figure 3)
+## Mean abundance per year
 
 Annual distribution of flying-fox abundance between 2012–current, showing:
 
   1. Peak (maximum) FFs recorded for each year
   2. Mean FFs recorded for each year
 
-### Data preparation
+### Import
 
 ```{r}
 # Prepare the data
@@ -802,19 +843,17 @@ dat_all <- dat %>%
   mutate(ghff = if_else(ghff == "800-1000", "900", ghff)) %>%
   
   # Replace ranges with mean
-  mutate(ghff = if_else(ghff == "200-250",  "225", ghff)
-  ) %>% 
+  mutate(ghff = if_else(ghff == "200-250",  "225", ghff)) %>% 
   
   mutate(
     ghff = as.numeric(ghff),
     lrff = as.numeric(lrff),
-    year = year(date)
-  ) %>% 
+    year = year(date)) %>% 
   
   mutate(bats_total = ghff + lrff) %>%
   
   # Remove years prior to year 2011
-  filter(year > 2011) %>%
+  filter(year > BEGIN) %>%
   
   # Calculate peak abundance
   group_by(year) %>%
@@ -822,9 +861,15 @@ dat_all <- dat %>%
   ungroup()
 ```
 
+### Plot
+
 ```{r}
 # Bar plot
-(abun_year <- ggplot(dat_all, (aes(x = factor(year), y = bats_total))) + 
+(abun_year <- ggplot(
+  dat_all, 
+  aes(
+    x = factor(year), 
+    y = bats_total)) + 
     
   # Draw violin plot 
   geom_violin(
@@ -834,49 +879,41 @@ dat_all <- dat %>%
     lwd      = 0.6, 
     na.rm    = TRUE, 
     scale    = "width", 
-    width    = 0.8
-  ) + 
+    width    = 0.8) + 
 
   # Draw boxplot 
   geom_boxplot(
-    col           = "white", 
-    fill          = "white", 
+    col           = white, 
+    fill          = white, 
     lwd           = 0.5, 
     na.rm         = TRUE, 
-    outlier.shape = NA, 
-    width         = 0.05
-  ) + 
+    outlier.shape = NA,
+    width         = 0.05) + 
 
   # Remove white ticks on legend scale
   guides(fill = guide_colorbar(ticks.colour = NA)) + 
-    
+  
+  # Configure axis titles
   labs(
     x = "Year", 
-    y = "Flying-fox abundance"
-  ) + 
+    y = "Flying-fox abundance") + 
   
-  scale_colour_gradientn(
-    colours        = c("#CACBE8", "#7B7FC7", "#000333"), 
+  # Configure axes
+  scale_colour_viridis_c(
     guide          = guide_colorbar(
       barheight    = unit(3, "cm"), 
-      barwidth     = unit(0.5, "cm")
-    ), 
-    name           = "Peak"
-  ) + 
+      barwidth     = unit(0.5, "cm")), 
+    name           = "Peak") + 
     
-  scale_fill_gradientn(
-    colours        = c("#CACBE8", "#7B7FC7", "#000333"), 
+  scale_fill_viridis_c(
     guide          = guide_colorbar(
       barheight    = unit(3, "cm"), 
-      barwidth     = unit(0.5, "cm")
-    ), 
-    name           = "Peak"
-  ) + 
+      barwidth     = unit(0.5, "cm")), 
+    name           = "Peak") + 
   
   scale_x_discrete(
     drop = FALSE, 
-    breaks = seq(2011, REPORTING_PERIOD, 1)
-  ) + 
+    breaks = seq(2011, REPORTING_PERIOD, 1)) + 
     
   scale_y_continuous(breaks = seq(0, 10000, 2000)) + 
   
@@ -888,150 +925,220 @@ dat_all <- dat %>%
     geom   = "point", 
     shape  = 21, 
     size   = 1.7, 
-    stroke = 1
-  ) + 
+    stroke = 1) + 
     
-   # Apply visual theme
+  # Apply visual theme
   theme_minimal() + 
   theme(
-    axis.line        = element_line(colour = "darkgrey"), 
+    axis.line        = element_line(colour = mono3), 
     axis.text.x      = element_text(vjust  = 0.5),
     axis.title.x     = element_blank(), 
     axis.title.y     = element_text(margin = margin(r = 5), vjust = 0.5),
     legend.position  = c(0.07, 0.7), 
     legend.text      = element_text(size = 8), 
     legend.title     = element_text(face = "bold", size = 8), 
-    panel.background = element_rect(fill = "white", colour = NA), 
+    panel.background = element_rect(fill = white, colour = NA), 
     panel.border     = element_blank(),
     panel.grid.major = element_blank(), 
     panel.grid.minor = element_blank(), 
-    plot.margin      = margin(t = -0.2, r = 0, b = 0, l = 0, "cm")
-  ) 
-)
+    plot.margin      = margin(t = -0.2, r = 0, b = 0, l = 0, "cm")))
 ```
 
 ```{r, include = FALSE}
 # Export plot as a jpeg file
 ggsave(
-  filename = "output/fig 3 annual abundance.jpeg",
+  filename = "output/annual abundance.jpeg",
   plot     = abun_year, 
   height   = 80, 
   width    = 200, 
   units    = "mm", 
-  dpi      = 600
-)
+  dpi      = 600)
 ```
 
-## Abundance and temperature (Figure 4)
+## Abundance by weather
 
-Here we overlay a line graph of FF abundance since 2012 with maximum and minimum temperature (Fig 5) from the [Australian Bureau of Meteorology](http://www.bom.gov.au/climate/data/index.shtml?bookmark = 136) (navigate to `ACT` > `Past weather` > `Data and graphs` > `Text search` > `Temperature` > `Maximum temperature` or `Minimum temperature` > weather station `70351`). 
+Here we overlay a line graph of FF abundance since 2012 with: 
 
-### Data preparation
+  1. [BOM maximum and minimum temperatures](http://www.bom.gov.au/climate/data/index.shtml?bookmark = 136)  
+    - Navigate to `ACT` > `Past weather` > `Data and graphs` > `Text search` > `Temperature` > `Maximum temperature` or `Minimum temperature` > weather station `70351`
+    
+  2. [BOM ENSO relative Niño3.4 index](https://www.bom.gov.au/climate/enso/indices.shtml)
+
+### Import
 
 ```{r}
 # Read in weather data
 weather <- read_excel(raw_data, sheet = "weather") %>%
+  
+  # Standardise column names
   clean_names() %>% 
-  filter(year > 2011) %>%
+  
+  # Remove dates rows before 2012
+  filter(year > BEGIN) %>%
+  
+  # Shorten column names
   rename(
     max = "max_temperature_c", 
-    min = "min_temperature_c"
-  ) %>%
+    min = "min_temperature_c") %>%
   
-  # Format date
+  # Format dates
   mutate(date = paste(year, month, day, sep = "/")) %>%
   mutate(date = as.Date(date, format = c("%Y/%m/%d")))
 
-# Pivot to long format
+# Pivot df to long format
 weather_long <- pivot_longer(
   weather,
   5:6, 
   names_to  = "type", 
-  values_to = "temperature"
-)
+  values_to = "temperature")
+```
+
+```{r}
+# Read in ENSO indices
+enso <- read_excel(raw_data, sheet = "enso") %>%
+  
+  # Standardise column names
+  clean_names() %>%
+  
+  # Convert YYYYMMDD to date columns
+  mutate(
+    start = sprintf("%08.0f", start),
+    date  = as.Date(start, format = "%Y%m%d"), 
+    year  = year(date), 
+    month = month(date), 
+    day   = day(date)) %>%
+  
+  # Remove dates rows before 2012
+  filter(year > BEGIN)
 ```
 
 ### Plot
 
 ```{r}
 # Draw ribbon and line plot
-(survey_weather_plot <- ggplot() +
-   
+quiet((survey_weather_plot <- ggplot() +
+  
+  # Draw minimum and maximum temperatures as a ribbon
   geom_ribbon(
-    data = weather,
+    data   = weather,
     aes(
       x    = as.Date(date),
       ymin = min * FF_SCALE,
-      ymax = max * FF_SCALE
-    ),
-    alpha = 0.7,
-    fill  = "#CACBE8"
-  ) +
-   
+      ymax = max * FF_SCALE),
+    alpha  = 0.7,
+    fill   = powder) +
+  
+  # Draw ENSO Niño3.4 indices line
   geom_line(
-    data = dat_all,
+    data      = enso,
     aes(
-      x = as.Date(date),
-      y = bats_total
-    ),
-    colour   = "#1F2148",
-    linewidth = 0.6
-  ) +
+      colour  = nino_3_4, 
+      x       = as.Date(date),
+      y       = (nino_3_4 * 800) -ENSO_ADJ),
+    linewidth = 0.6) +
+  
+  # Draw rectangle for ENSO upper band 
+  geom_rect(
+    aes(
+      xmax      = as.Date(END),
+      xmin      = as.Date(BEGIN),
+      ymax      = (max(enso$nino_3_4) * 800) - ENSO_ADJ,
+      ymin      = (ENSO_NEUT          * 800) - ENSO_ADJ),
+    alpha       = 0.12,
+    fill        = vir1, 
+    inherit.aes = FALSE) +  
+      
+  # Draw rectangle for ENSO neutral band 
+  geom_rect(
+    aes(
+      xmax      = as.Date(END),
+      xmin      = as.Date(BEGIN),
+      ymax      = ( ENSO_NEUT * 800) - ENSO_ADJ,
+      ymin      = (-ENSO_NEUT * 800) - ENSO_ADJ),
+    alpha       = 0.12,
+    fill        = vir7, 
+    inherit.aes = FALSE) +  
+  
+  # Draw rectangle for ENSO lower band 
+  geom_rect(
+    aes(
+      xmax      = as.Date(END),
+      xmin      = as.Date(BEGIN),
+      ymax      = (-ENSO_NEUT         * 800) - ENSO_ADJ,
+      ymin      = (min(enso$nino_3_4) * 800) - ENSO_ADJ),
+    alpha       = 0.12,
+    fill        = vir14, 
+    inherit.aes = FALSE) +  
+     
+  # Draw flying-fox abundance line
+  geom_line(
+    data      = dat_all,
+    aes(
+      x       = as.Date(date),
+      y       = bats_total),
+    colour    = purple,
+    linewidth = 0.6) +
+  
+  # Configure axes
+  scale_colour_viridis_c(name = "ENSO Niño3.4 index") + 
    
   scale_x_date(
     name        = "Year",
     date_labels = "%Y",
-    date_breaks = "2 years"
-  ) +
-   
+    date_breaks = "2 years") +
+  
   scale_y_continuous(
     name     = "Flying-fox abundance",
-    breaks   = seq(0, 10000, 2000), 
+    breaks   = seq(0, 11000, 2000), 
     sec.axis = sec_axis(
       ~ . / FF_SCALE,
-      name = "Daily temperature (°C)"
-    )
-  ) +
+      name   = "Daily temperature (°C)", 
+      breaks = seq(0, 40, 10))) +
   
+  # Configure legend
+  guides(
+    colour = guide_colourbar(
+      title.position = "left",
+      title.theme    = element_text(margin = margin(r = 8)),
+      title.vjust    = 0.8)) + 
+    
   # Apply visual theme
   theme_minimal() +
   theme(
-    axis.line        = element_line(colour = "darkgrey"),
-    axis.text.x      = element_text(vjust  = 1),
-    axis.text.y      = element_text(vjust  = 0.5),
-    axis.title.x     = element_blank(),
-    axis.title.y     = element_text(vjust  = 1),
-    legend.position  = "bottom",
-    legend.text      = element_text(size   = 8),
-    legend.title     = element_blank(),
-    panel.background = element_rect(colour = NA, fill = "white"),
-    panel.border     = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    plot.margin      = margin(t = -0.3, r = 0, b = 0, l = 0, "cm")
-  )
-)
+    axis.line          = element_line(colour = mono3),
+    axis.text.x        = element_text(vjust  = 1),
+    axis.text.y        = element_text(vjust  = 0.5),
+    axis.title.x       = element_blank(),
+    axis.title.y.left  = element_text(hjust = 0.75, margin = margin(r = 12)),
+    axis.title.y.right = element_text(hjust = 0.25, margin = margin(l = 12)), 
+    legend.position    = "bottom", 
+    legend.text        = element_text(size   = 8),
+    legend.title       = element_text(margin = margin(b = 12)), 
+    panel.background   = element_rect(colour = NA, fill = white),
+    panel.border       = element_blank(),
+    panel.grid.major   = element_blank(),
+    panel.grid.minor   = element_blank(),
+    plot.margin        = margin(t = -0.3, r = 0, b = -0.2, l = 0.01, "cm"))))
 ```
 
 ```{r, include = FALSE}
 # Export plot as a jpeg file
 ggsave(
-  filename = "output/fig 4 abundance by temperature.jpeg",
+  filename = "output/abundance by climate.jpeg",
   plot     = survey_weather_plot, 
-  height   = 80, 
+  height   = 120, 
   width    = 200, 
   units    = "mm", 
-  dpi      = 600
-)
+  dpi      = 600)
 ```
 
-## Density maps (Figure 5)
+## Density maps
 
-Here we map the density of FFs in each tree across the camp (Fig 6). `surveys_wide` is from the `surveys` table in the database, and `trees` is from the `trees` table. 
+Here we map the density of FFs in each tree across the camp. `surveys_wide` is from the `surveys` table in the database, and `trees` is from the `trees` table. 
 
 Because we didn't do any surveys in June and July, but want them to appear in our figure, *you will need to add dummy surveys for these months* into the `surveys` dataframe. You can do this by copying the row for Aug 22, 2020 (where all the trees have 0 bats) several times for each missing month per year, and changing the date to one that occurs in each missing month (e.g., Jun 1, 2020 for June). 
 
-### Data preparation
+### Import
 
   1. Convert tree columns from wide format (one per column) to long format (tree identities listed in one column).
 
@@ -1045,8 +1152,7 @@ surveys <- melt(
   surveys_wide, 
   measure.vars  = c(30:203), 
   variable.name = "tree", 
-  value.name    = "bats"
-)
+  value.name    = "bats")
 ```
 
   2. Merge surveys with coordinates for each tree
@@ -1065,8 +1171,7 @@ surveys_trees <- left_join(surveys, trees, by = "tree") %>%
   mutate(
     year  = format(date, "%Y"),
     month = format(date, "%b"), 
-    dates = format(date, "%d %b %y")
-  )
+    dates = format(date, "%d %b %y"))
 ```
 
  4. Get base layer from Google Maps
@@ -1078,8 +1183,7 @@ map <- get_map(
   zoom     = 19, 
   source   = "google", 
   maptype  = "roadmap", 
-  crop     = FALSE
-)
+  crop     = FALSE)
 ```
 
   5. Order months
@@ -1101,8 +1205,7 @@ data <- surveys_trees %>%
       "Dec", "Jan", "Feb", 
       "Mar", "Apr", "May", 
       "Jun", "Jul", "Aug", 
-      "Sep", "Oct", "Nov"
-    )), 
+      "Sep", "Oct", "Nov")), 
     
     foxes    = cut(
       as.numeric(bats), 
@@ -1112,16 +1215,14 @@ data <- surveys_trees %>%
         "50-100", 
         "100-200", 
         "200-400", 
-        ">400"
-      ))) %>%
+        ">400"))) %>%
   
   mutate(foxes = factor(foxes, levels = c(
     ">400", 
     "100-200", 
     "200-400", 
     "50-100", 
-    "0-50"
-  )))
+    "0-50")))
 ```
 
 ### Plot
@@ -1137,8 +1238,7 @@ density_map <- ggmap(map) +
     alpha   = 0.2, 
     col     = "darkgreen", 
     shape   = 8, 
-    size    = 1
-  ) +
+    size    = 1) +
   
   geom_point(
     data, 
@@ -1147,8 +1247,7 @@ density_map <- ggmap(map) +
       alpha = as.numeric(bats), 
       col   = as.numeric(bats), 
       x     = longitude, 
-      y     = latitude
-    )) +
+      y     = latitude)) +
   
   facet_wrap(~month, ncol = 3) +
   
@@ -1158,8 +1257,7 @@ density_map <- ggmap(map) +
       reverse = TRUE), 
     col       = guide_legend(
       title   = "Number of \nflying-foxes\nrecorded", 
-      reverse = TRUE)
-    ) +
+      reverse = TRUE)) +
   
   labs(x = "", y = "") + 
   
@@ -1167,12 +1265,11 @@ density_map <- ggmap(map) +
     low      = 0, 
     midpoint = 10, 
     mid      = "yellow", 
-    high     = "red"
-  ) + 
+    high     = "red") + 
     
   # Apply visual theme
   theme(
-    axis.line        = element_line(colour = "darkgrey"), 
+    axis.line        = element_line(colour = mono3), 
     axis.text.x      = element_blank(), 
     axis.text.y      = element_blank(),
     axis.ticks.x     = element_blank(),
@@ -1183,11 +1280,10 @@ density_map <- ggmap(map) +
     legend.text      = element_text(size = 8),
     legend.title     = element_text(size = 10), 
     panel.grid       = element_blank(),
-    panel.background = element_rect(fill = "white", colour = NA), 
+    panel.background = element_rect(fill = white, colour = NA), 
     plot.margin      = margin(t = -10, r = 4, b = 5, l = 5), 
-    strip.background = element_rect(fill   = "#1F2148"),
-    strip.text       = element_text(colour = "white")
-  )
+    strip.background = element_rect(fill   = purple),
+    strip.text       = element_text(colour = white)
 
 # Display map
 # print(density_map)
@@ -1196,20 +1292,19 @@ density_map <- ggmap(map) +
 ```{r, include = FALSE, eval = FALSE}
 # Save the plot as a jpeg file
 ggsave(
-  filename = "output/fig 6 tree density maps.jpeg", 
+  filename = "output/tree density maps.jpeg", 
   plot     = density_map, 
   height   = 3500, 
   width    = 4000, 
   units    = "px", 
-  dpi      = 800
-)
+  dpi      = 800)
 ```
 
-## Camp occupation (Figure 6)
+## Seasonal migration
 
 Here we plot the dates that flying-foxes occupied the camp each year. Because the flying-foxes never vacated the camp in 2014, we entered back-to-back dates to enable plotting. 
 
-### Data preparation
+### Import
 
 ```{r}
 # Read in dates of camp occupation
@@ -1249,65 +1344,54 @@ occ <- read_excel(raw_data, sheet = "occupation") %>%
       y       = year_sec, 
       yend    = year_sec, 
       x       = as.Date(format(year_start, "2012-%m-%d")),
-      xend    = as.Date(format(  dep_date, "2012-%m-%d"))
-    ), 
-    linewidth = 2
-  ) +
+      xend    = as.Date(format(  dep_date, "2012-%m-%d"))), 
+    linewidth = 2) +
   
   geom_segment(
     aes(
     color     = year, 
     x         = as.Date(format(arr_date, "2012-%m-%d")),
     xend      = as.Date(format(year_end, "2012-%m-%d")), 
-    y         = year_sec, yend = year_sec
-    ), 
-    linewidth = 2
-  ) +
+    y         = year_sec, yend = year_sec), 
+    linewidth = 2) +
   
   geom_point(
     aes(
       fill = year, 
       x = as.Date(format(peak_date, "2012-%m-%d")), 
-      y = year_sec 
-    ), 
+      y = year_sec), 
     alpha  = 0.6, 
-    color  = "white", 
+    color  = white, 
     shape  = 21, 
     size   = 5, 
-    stroke = 1.2
-  ) +
+    stroke = 1.2) +
  
    # Add departure date labels after the bar
   geom_text(
     aes(
       label = format(dep_date, "%d %b"), 
       x     = as.Date(format(dep_date, "2012-%m-%d")) + 5, 
-      y     = year_sec
-    ),
+      y     = year_sec),
     color   = "grey50", 
     hjust   = 0, 
-    size    = 2.5
-  ) +
+    size    = 2.5) +
  
    # Add arrival date labels before the bar
   geom_text(
     aes(
       label = format(arr_date, "%d %b"), 
       x     = as.Date(format(arr_date, "2012-%m-%d")) - 5, 
-      y     = year_sec
-    ),
+      y     = year_sec),
     color   = "grey50", 
     hjust   = 1, 
-    size    = 2.5
-  ) +
+    size    = 2.5) +
  
    scale_x_date(
      date_labels = "%b", 
      date_breaks = "1 month",
      limits      = c(
        as.Date("2012-01-01"), 
-       as.Date("2012-12-31")
-  )) +
+       as.Date("2012-12-31"))) +
   
   labs(x = "Month") + 
   scale_color_viridis_d() + 
@@ -1320,13 +1404,12 @@ occ <- read_excel(raw_data, sheet = "occupation") %>%
       ~., 
       breaks = occ$year_sec, 
       labels = occ$peak_abundance, 
-      name   = "Peak flying-fox abundance"
-  )) +
+      name   = "Peak flying-fox abundance")) +
   
   # Apply visual theme
   theme_minimal() +
   theme(
-    axis.line          = element_line(colour = "darkgrey"), 
+    axis.line          = element_line(colour = mono3), 
     axis.text.x        = element_text(hjust = 1), 
     axis.text.y        = element_text(hjust = 1), 
     axis.title.x       = element_blank(), 
@@ -1335,28 +1418,25 @@ occ <- read_excel(raw_data, sheet = "occupation") %>%
     legend.position    = "none", 
     legend.text        = element_text(size = 8),
     legend.title       = element_blank(), 
-    panel.background   = element_rect(fill = "white", colour = NA), 
+    panel.background   = element_rect(fill = white, colour = NA), 
     panel.grid         = element_blank(),
-    plot.margin        = margin(t = 0, r = 0, b = 0, l = 0)
-  )
-)
+    plot.margin        = margin(t = 0, r = 0, b = 0, l = 0)))
 ```
 
 ```{r, include = FALSE}
 # Save the plot as a jpeg file
 ggsave(
-  filename = "output/fig 6 occupation.jpeg",
+  filename = "output/seasonal occupation.jpeg",
   plot     = occ_plot, 
-  height   = 3500, 
+  height   = 4000, 
   width    = 6000, 
   units    = "px", 
-  dpi      = 800
-)
+  dpi      = 800)
 ```
 
-## Categorical variables (Figure 7)
+## Categorical variables
 
-### Data preparation
+### Import
 
 ```{r}
 # Prepare levels counts for categorical variables
@@ -1369,8 +1449,7 @@ dat_cat <- dat_cur %>%
   rename(
     heat  = heat_stress, 
     humid = humidity, 
-    pups  = mothers_and_pups
-  ) %>%
+    pups  = mothers_and_pups) %>%
   
   # Format month
   mutate(month = floor_date(date, "month")) %>%
@@ -1379,8 +1458,7 @@ dat_cat <- dat_cur %>%
   pivot_longer(
     cols      = all_of(cat_vars),
     names_to  = "var",
-    values_to = "level"
-  ) %>%
+    values_to = "level") %>%
   
   # Remove NAs
   filter(!is.na(level), level != "") %>%
@@ -1410,29 +1488,22 @@ cat_plots <- dat_cat %>%
         fill  = "",
         title = cat_labs[[v]], 
         x     = "Month",
-        y     = "Frequency"
-      ) +
+        y     = "Frequency") +
       
       # Define fill colours
       scale_fill_manual(
-        values = c(
-          "#2C2F69", 
-          "#8E92DE", 
-          "#A1CC76", 
-          "#C4A487" 
-      )) +
+        values = c(purple, lilac, lime, tan)) +
       
       # Define date axis
       scale_x_date(
         date_labels = "%b",
         date_breaks = "1 month",
-        expand      = c(0, 0)
-      ) +
+        expand      = c(0, 0)) +
       
       # Apply visual theme
       theme_minimal() +
       theme(
-        axis.line        = element_line(colour = "darkgrey"),
+        axis.line        = element_line(colour = mono3),
         axis.text.x      = element_text(angle  = 90, vjust = 1),
         axis.text.y      = element_text(vjust  = 0.5),
         axis.title.x     = element_blank(),
@@ -1440,15 +1511,13 @@ cat_plots <- dat_cat %>%
         legend.position  = "bottom",
         legend.text      = element_text(size   = 9),
         legend.title     = element_blank(),
-        panel.background = element_rect(colour = NA, fill = "white"),
+        panel.background = element_rect(colour = NA, fill = white),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.border     = element_blank(),
         plot.margin      = margin(t = 0.4, r = 0.5, b = 0.5, l = 0.5, "cm"), 
-        plot.title       = element_text(face = "bold", hjust = 0.5, size = 12)
-      )
-  }
-)
+        plot.title       = element_text(
+          face = "bold", hjust = 0.5, size = 12))})
 
 # Display plots
 print(cat_plots$pups)
@@ -1473,27 +1542,232 @@ cat_plots <- cat_plots[c(
   "rubbish",
   "cloud",
   "humid",
-  "wind"
-)]
+  "wind")]
 
 # Combine plots
 (cat_plots_comb <- ggarrange(
   plotlist      = cat_plots,
   ncol          = 3,
   nrow          = ceiling(length(cat_plots) / 3), 
-  common.legend = FALSE
-  )
-)
+  common.legend = FALSE))
 
 # Export plot as a jpeg file
 ggsave(
-  filename = "output/fig 5 categories.jpeg",
+  filename = "output/categorical conditions.jpeg",
   plot     = cat_plots_comb, 
   height   = 200, 
   width    = 350, 
   units    = "mm", 
-  dpi      = 600
-)
+  dpi      = 600)
+```
+
+## Canopy cover
+
+Since 2019, we estimated the range (minimum and maximum) proportion of canopy cover for the four main tree types at the Commonweath Park FF camp: 
+
+- **Broadleaves:** elms (*Ulmus* spp.), oaks (*Quercus* spp.), and poplars (*Populus* spp.)
+- **Needleleafs:** cedars (*Cedrus* spp.), cypress (*Cupressus* spp.), and sequoias (*Sequoiadendron* spp.)
+  - **Eucalypts:** mealy bundy (*Eucalyptus nortonii*), river peppermint (*Eucalyptus elata*), Blakely's red gum (*Eucalyptus blakelyi*)
+  - **Laurels:** Camphor Laurel (*Cinnamomum camphora*)
+
+### Import
+
+```{r}
+# Prepare canopy cover measures
+canopy <- read_excel(raw_data, sheet = "surveys") %>%
+  
+  # Standardise column names
+  clean_names() %>% 
+  
+  # Convert date
+  mutate(date = as.Date(date, format = c("%d/%m/%Y"))) 
+
+# Pivot canopy data
+canopy <- canopy %>%
+  # Select canopy cover columns
+  select(
+    date, 
+    ends_with("_canopy_min"), 
+    ends_with("_canopy_max")) %>%
+  
+  # Pivot tree species columns to long format
+  pivot_longer(
+    cols      = -date,
+    names_to  = c("species", "stat"),
+    names_sep = "_canopy_",
+    values_to = "canopy") %>%
+  
+  # Pivot min and max columns to long format
+  pivot_wider(
+    names_from  = stat,
+    values_from = canopy, 
+    values_fn   = mean, 
+    values_fill = NA_real_) %>%
+  
+  # Reorder tree species levels
+  mutate(species = factor(
+    species, 
+    levels = c("oak",         "pine",         "euc",       "laurel"), 
+    labels = c("Broadleaves", "Needleleaves", "Eucalypts", "Laurels")))
+```
+
+```{r}
+# Prepare flying-fox abundance data
+dat_ff <- dat %>%
+  mutate(ff = as.numeric(ghff) + as.numeric(lrff)) %>%
+  select(date, ff)
+
+# Join flying-fox abundances to canopy cover df
+canopy_ff <- canopy %>%
+  left_join(dat_ff, by = "date")
+
+# Define axis mapping
+FF_MAX     <- 9000
+CANOPY_MAX <- 100
+FF_PER_PC  <- FF_MAX / CANOPY_MAX
+
+# Smooth canopy min/max within species
+canopy_sm <- canopy_ff %>%
+  group_by(species) %>%
+  mutate(
+    
+    # Calculate mean canopy cover
+    mean_cc = (min + max) / 2, 
+    
+    # Calculate smoothed mean canopy cover
+    mean_sm = {
+      fit <- loess(
+        mean_cc   ~ as.numeric(date),
+        data      = pick(date, mean_cc),
+        na.action = na.exclude,
+        span      = 0.3)
+      predict(fit, newdata = data.frame(date = as.numeric(date)))}, 
+
+    # Calculate smoothed min canopy cover
+    min_sm = {
+      fit <- loess(
+        min       ~ as.numeric(date),
+        data      = pick(date, min),
+        na.action = na.exclude,
+        span      = 0.3)
+      predict(fit, newdata = data.frame(date = as.numeric(date)))},
+    
+    #Calculate smoothed max canopy cover
+    max_sm = {
+      fit <- loess(
+        max       ~ as.numeric(date),
+        data      = pick(date, max),
+        na.action = na.exclude,
+        span      = 0.3)
+      predict(fit, newdata = data.frame(date = as.numeric(date)))}) %>%
+  
+  ungroup()
+```
+
+### Statistics
+
+```{r}
+# Print statistics for canopy cover surveys
+nrow(canopy)
+min(canopy$date, na.rm = TRUE) # 2018-12-15
+max(canopy$date, na.rm = TRUE) # 2024-09-29
+```
+
+### Plot
+
+```{r}
+# Plot and display ribbon for canopy cover
+(canopy_plot <- ggplot(
+  canopy_sm,
+  aes(
+    group = species,
+    x     = date)) +
+  
+  # Split plot by tree species
+  facet_wrap(~ species, ncol = 1) +
+
+  # Draw flying-fox abundance line (primary axis)
+  geom_line(
+    aes(y       = ff), 
+    colour      = purple, 
+    linewidth   = 0.7, 
+    show.legend = FALSE) + 
+  
+  # Draw canopy cover line
+  geom_line(
+    aes(
+      colour  = species,
+      y       = mean_sm * FF_PER_PC),
+    linewidth = 0.7) + 
+   
+  # Draw smoothed canopy cover ribbon, scaled onto FF axis
+  geom_ribbon(
+    aes(
+      fill = species,
+      ymin = min_sm * FF_PER_PC,
+      ymax = max_sm * FF_PER_PC),
+    alpha = 0.3) +
+
+  # Configure axes
+  scale_colour_manual(
+  values = c(
+    "Broadleaves"      = brown,
+    "Needleleaves"     = green,
+    "Eucalypts" = orange,
+    "Laurels"   = lilac)) +
+  
+  scale_fill_manual(
+  values = c(
+    "Broadleaves"      = brown,
+    "Needleleaves"     = green,
+    "Eucalypts" = orange,
+    "Laurels"   = lilac)) +
+   
+  # Configure x-axis
+  scale_x_date(
+    date_breaks = "1 year",
+    date_labels = "%Y") + 
+    
+  # Configure primary y-axis
+  scale_y_continuous(
+    limits   = c(0, FF_MAX),
+    breaks   = seq(0, FF_MAX, 2000),
+    name     = "Flying-fox abundance",
+    
+    # Configure secondary y-axis
+    sec.axis = sec_axis(
+      ~ . / FF_PER_PC,
+      name   = "Canopy cover (%)",
+      breaks = seq(0, 100, 20))) + 
+   
+  # Apply visual theme
+  theme_minimal() +
+  theme(
+    axis.line          = element_line(colour = mono3),
+    axis.text.x        = element_text(vjust  = 1),
+    axis.text.y        = element_text(vjust  = 0.5),
+    axis.title.x       = element_blank(),
+    axis.title.y.left  = element_text(margin = margin(r = 12)),
+    axis.title.y.right = element_text(margin = margin(l = 12)), 
+    legend.position    = "none", 
+    panel.background   = element_rect(colour = NA, fill = white),
+    panel.border       = element_blank(),
+    panel.grid.major   = element_blank(),
+    panel.grid.minor   = element_blank(),
+    plot.margin        = margin(t = -0.01, r = 0, b = 0, l = 0.01, "cm"), 
+    strip.text         = element_text(
+      face = "bold", margin = margin(t = 9), size = 11)))
+```
+
+```{r, include = FALSE}
+# Export plot as a jpeg file
+ggsave(
+  filename = "output/abundance by canopy cover.jpeg",
+  plot     = canopy_plot, 
+  height   = 110, 
+  width    = 180, 
+  units    = "mm", 
+  dpi      = 600)
 ```
 
 # **Session information**
