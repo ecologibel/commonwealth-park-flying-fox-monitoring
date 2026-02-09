@@ -194,15 +194,13 @@ run_setup()
 
 ## Load project-specific packages
 
-## Load project-specific packages
-
 This script installs and loads *project-specific* packages (*commonly used* packages are loaded in `setup.Rmd`). 
 
 ```{r, results = 'hide', warning = FALSE, message = FALSE}
 # Install and load project-related packages
 pacman::p_load(
   # Data wrangling
-  grid, hms, naniar, reshape2 
+  broom, ggh4x, grid, hms, naniar, reshape2 
 ) 
 ```
 
@@ -224,25 +222,30 @@ This chunk tabulates the abbreviations used in our workflows.
 
 ```{r}
 # Define dates for current reporting period
-START            <- "2024-12-01"
-END              <- "2025-11-30"
-REPORTING_PERIOD <- 2025
+REP_START     <- "2024-12-01"
+REP_END       <- "2025-11-30"
+REP_YEAR          <- 2025
 
-# Define date for the beginning of FF monitoring
-BEGIN            <- "2012-01-01"
+# Define dates for tree-by-tree surveys
+TREE_START    <- as.Date("2018-12-15")
+TREE_END      <- as.Date("2024-09-29")
+
+# Define dates for all surveys
+ALL_START     <- as.Date("2012-01-01")
+ALL_END       <- REP_END
 
 # Define whether LRFFs were recorded in the last reporting period
-LRFFS_RECORDED   <- FALSE
+LRFFS_PRESENT <- FALSE
 
 # Define visual scaling factor to align trees occupied with FF abundance
-TREE_SCALE       <- 20
+TREE_SCALE    <- 20
 
 # Define visual scaling factor to align FF abundance with temperature
-FF_SCALE         <- 200
+FF_SCALE      <- 200
 
 # Define visual scaling factors for ENSO Niño3.4 values 
-ENSO_NEUT        <- 0.8
-ENSO_ADJ         <- 4000
+ENSO_NEUT     <- 0.8
+ENSO_ADJ      <- 4000
 ```
 
 #### Maps
@@ -414,14 +417,12 @@ dat_wide <- dat %>%
 
 # Subset to current reporting period
 dat_cur <- dat_wide %>%
-  filter(date > START & date < END) %>%
-  # Include LRFFs if LRFFS_RECORDED = TRUE 
-  filter(LRFFS_RECORDED | species != "lrff")
+  filter(date > REP_START & date < REP_END) %>%
+  # Include LRFFs if LRFFS_PRESENT = TRUE 
+  filter(LRFFS_PRESENT | species != "lrff")
 
 # Export df to a new sheet in the running workbook
 workbook <- export_sheet(dat_cur, sheet = "data")
-
-View(dat_wide)
 ```
 
 ### Raw line graph
@@ -853,7 +854,7 @@ dat_all <- dat %>%
   mutate(bats_total = ghff + lrff) %>%
   
   # Remove years prior to year 2011
-  filter(year > BEGIN) %>%
+  filter(year >= lubridate::year(as.Date(ALL_START))) %>% 
   
   # Calculate peak abundance
   group_by(year) %>%
@@ -913,7 +914,7 @@ dat_all <- dat %>%
   
   scale_x_discrete(
     drop = FALSE, 
-    breaks = seq(2011, REPORTING_PERIOD, 1)) + 
+    breaks = seq(2011, REP_YEAR, 1)) + 
     
   scale_y_continuous(breaks = seq(0, 10000, 2000)) + 
   
@@ -974,7 +975,7 @@ weather <- read_excel(raw_data, sheet = "weather") %>%
   clean_names() %>% 
   
   # Remove dates rows before 2012
-  filter(year > BEGIN) %>%
+  filter(year >= lubridate::year(as.Date(ALL_START))) %>% 
   
   # Shorten column names
   rename(
@@ -1009,7 +1010,7 @@ enso <- read_excel(raw_data, sheet = "enso") %>%
     day   = day(date)) %>%
   
   # Remove dates rows before 2012
-  filter(year > BEGIN)
+  filter(year >= lubridate::year(as.Date(ALL_START))) 
 ```
 
 ### Plot
@@ -1040,8 +1041,8 @@ quiet((survey_weather_plot <- ggplot() +
   # Draw rectangle for ENSO upper band 
   geom_rect(
     aes(
-      xmax      = as.Date(END),
-      xmin      = as.Date(BEGIN),
+      xmax      = as.Date(REP_END),
+      xmin      = as.Date(ALL_START),
       ymax      = (max(enso$nino_3_4) * 800) - ENSO_ADJ,
       ymin      = (ENSO_NEUT          * 800) - ENSO_ADJ),
     alpha       = 0.12,
@@ -1051,8 +1052,8 @@ quiet((survey_weather_plot <- ggplot() +
   # Draw rectangle for ENSO neutral band 
   geom_rect(
     aes(
-      xmax      = as.Date(END),
-      xmin      = as.Date(BEGIN),
+      xmax      = as.Date(REP_END),
+      xmin      = as.Date(ALL_START),
       ymax      = ( ENSO_NEUT * 800) - ENSO_ADJ,
       ymin      = (-ENSO_NEUT * 800) - ENSO_ADJ),
     alpha       = 0.12,
@@ -1062,8 +1063,8 @@ quiet((survey_weather_plot <- ggplot() +
   # Draw rectangle for ENSO lower band 
   geom_rect(
     aes(
-      xmax      = as.Date(END),
-      xmin      = as.Date(BEGIN),
+      xmax      = as.Date(REP_END),
+      xmin      = as.Date(ALL_START),
       ymax      = (-ENSO_NEUT         * 800) - ENSO_ADJ,
       ymin      = (min(enso$nino_3_4) * 800) - ENSO_ADJ),
     alpha       = 0.12,
@@ -1136,7 +1137,7 @@ ggsave(
 
 Here we map the density of FFs in each tree across the camp. `surveys_wide` is from the `surveys` table in the database, and `trees` is from the `trees` table. 
 
-Because we didn't do any surveys in June and July, but want them to appear in our figure, *you will need to add dummy surveys for these months* into the `surveys` dataframe. You can do this by copying the row for Aug 22, 2020 (where all the trees have 0 bats) several times for each missing month per year, and changing the date to one that occurs in each missing month (e.g., Jun 1, 2020 for June). 
+Because we didn't do any surveys in June and July, but want them to appear in our figure, *we need to add dummy surveys for these months* into the `surveys` dataframe. You can do this by copying the row for Aug 22, 2020 (where all the trees have 0 bats) several times for each missing month per year, and changing the date to one that occurs in each missing month (e.g., Jun 1, 2020 for June). 
 
 ### Import
 
@@ -1198,7 +1199,7 @@ data <- surveys_trees %>%
   mutate(date = as.Date(date, format = c("%d/%m/%Y"))) %>%
   
   # Select only dates during the current reporting period
-  subset(date > START & date < END) %>%
+  subset(date > REP_START & date < REP_END) %>%
   
   mutate(
     month = factor(month, levels = c(
@@ -1283,7 +1284,7 @@ density_map <- ggmap(map) +
     panel.background = element_rect(fill = white, colour = NA), 
     plot.margin      = margin(t = -10, r = 4, b = 5, l = 5), 
     strip.background = element_rect(fill   = purple),
-    strip.text       = element_text(colour = white)
+    strip.text       = element_text(colour = white))
 
 # Display map
 # print(density_map)
@@ -1320,7 +1321,7 @@ occ <- read_excel(raw_data, sheet = "occupation") %>%
     year_start, 
     year_end), 
   as.Date),
-         
+  
   # Extract month and day and apply a single year
   arr_date  = as.Date(paste("2012", format(arrival,   "%m-%d"), sep = "-")),
   dep_date  = as.Date(paste("2012", format(departure, "%m-%d"), sep = "-")),
@@ -1565,37 +1566,54 @@ ggsave(
 
 Since 2019, we estimated the range (minimum and maximum) proportion of canopy cover for the four main tree types at the Commonweath Park FF camp: 
 
-- **Broadleaves:** elms (*Ulmus* spp.), oaks (*Quercus* spp.), and poplars (*Populus* spp.)
-- **Needleleafs:** cedars (*Cedrus* spp.), cypress (*Cupressus* spp.), and sequoias (*Sequoiadendron* spp.)
-  - **Eucalypts:** mealy bundy (*Eucalyptus nortonii*), river peppermint (*Eucalyptus elata*), Blakely's red gum (*Eucalyptus blakelyi*)
-  - **Laurels:** Camphor Laurel (*Cinnamomum camphora*)
+  - **Broadleaves:** (e.g., elm *Ulmus* spp., oak *Quercus* spp., poplar *Populus* spp., and silver birch *Betula pendula*), 
+  - **Needleleaves:** (e.g., cedar *Cedrus* spp., cypress *Cupressus* spp., sequoia *Sequoiadendron* spp.), 
+  - **Eucalypts:** (e.g., Blakely's red gum *Eucalyptus blakelyi*, mealy bundy *Eucalyptus nortonii*, river peppermint *Eucalyptus elata*), and 
+  - **Laurels:** Camphor laurel (*Cinnamomum camphora*)
 
 ### Import
 
 ```{r}
+# Prepare flying-fox abundance data
+dat_ff <- dat %>%
+  mutate(ff = as.numeric(ghff) + as.numeric(lrff)) %>%
+  select(date, ff)
+
+# Prepare minimum and maximum temperature data
+weather_can <- weather %>%
+  mutate(
+    date      = as.Date(date), 
+    max_temp  = as.numeric(max), 
+    min_temp  = as.numeric(min), 
+    mean_temp = (as.numeric(min) + as.numeric(max)) / 2) %>%
+  select(date, max_temp, min_temp, mean_temp) 
+
 # Prepare canopy cover measures
-canopy <- read_excel(raw_data, sheet = "surveys") %>%
+canopy <- read_excel(raw_data, sheet = "surveys", na = c("N/A")) %>%
   
   # Standardise column names
   clean_names() %>% 
   
   # Convert date
-  mutate(date = as.Date(date, format = c("%d/%m/%Y"))) 
-
-# Pivot canopy data
-canopy <- canopy %>%
+  mutate(date = as.Date(date, format = c("%d/%m/%Y")), 
+         year = lubridate::year(date)) %>%
+  
   # Select canopy cover columns
   select(
     date, 
+    year, 
     ends_with("_canopy_min"), 
     ends_with("_canopy_max")) %>%
   
   # Pivot tree species columns to long format
   pivot_longer(
-    cols      = -date,
+    cols      = -c(date, year),
     names_to  = c("species", "stat"),
     names_sep = "_canopy_",
     values_to = "canopy") %>%
+  
+  # Parse only numeric canopy cover values
+  mutate(canopy = readr::parse_number(as.character(canopy))) %>%
   
   # Pivot min and max columns to long format
   pivot_wider(
@@ -1608,26 +1626,150 @@ canopy <- canopy %>%
   mutate(species = factor(
     species, 
     levels = c("oak",         "pine",         "euc",       "laurel"), 
-    labels = c("Broadleaves", "Needleleaves", "Eucalypts", "Laurels")))
+    labels = c("Broadleaves", "Needleleaves", "Eucalypts", "Laurels"))) %>%
+    
+  # Generate mean cover, season, and reporting period columns
+  mutate(
+    
+    cover  = (min + max) / 2,
+    
+    season = as.factor(case_when(
+      month(date) %in% c(12, 1, 2)  ~ "Summer",
+      month(date) %in% c(3, 4, 5)   ~ "Autumn",
+      month(date) %in% c(6, 7, 8)   ~ "Winter",
+      month(date) %in% c(9, 10, 11) ~ "Spring")),
+    
+    period = case_when(
+      date >= as.Date(REP_START)  & date <= as.Date(REP_END) ~ "Reporting",
+      date >= TREE_START          & date <= TREE_END         ~ "Baseline",
+      TRUE ~ NA_character_)) %>%
+  
+  mutate(season = factor(season, levels = c(
+    "Summer", "Autumn", "Winter", "Spring"))) %>%
+  
+  # Remove surveys before they became standardised
+  filter(!is.na(period)) %>%
+  
+  # Join flying-fox abundances to canopy cover df
+  left_join(dat_ff, by = "date") %>%
+  
+  # Join temperature
+  left_join(weather_can, by = "date") 
+
+# Export df to a new sheet in the running workbook
+workbook <- export_sheet(canopy, sheet = "canopy")
 ```
 
+### Statistics
+
 ```{r}
-# Prepare flying-fox abundance data
-dat_ff <- dat %>%
-  mutate(ff = as.numeric(ghff) + as.numeric(lrff)) %>%
-  select(date, ff)
+# Print statistics for canopy cover estimates
+nrow(canopy)
+min(canopy$date, na.rm = TRUE) # 2018-12-15
+max(canopy$date, na.rm = TRUE) # 2024-09-29
 
-# Join flying-fox abundances to canopy cover df
-canopy_ff <- canopy %>%
-  left_join(dat_ff, by = "date")
+# Calculate baseline means
+(baseline_means <- canopy %>%
+  filter(period == "Baseline") %>%
+  group_by(species, season) %>%
+  summarise(
+    n_surveys  = n(),
+    mean_cover = mean(cover, na.rm = TRUE),
 
+    min_cover  = min(cover, na.rm = TRUE),
+    min_dates  = paste(sort(unique(date[cover == min_cover])), 
+                        collapse = ", "),
+
+    max_cover  = max(cover, na.rm = TRUE),
+    max_dates  = paste(sort(unique(date[cover == max_cover])), 
+                       collapse = ", "),
+    .groups    = "drop") %>%
+  arrange(species, season))
+```
+
+> 🚩 *Draft until tree-by-tree data for 2025 reporting period is available*.
+
+```{r, draft= TRUE}
+# Calculate seasonal reporting-period statistics
+(seasonal_reporting <- canopy %>%
+  filter(period == "Reporting") %>%
+  group_by(species, season) %>%
+  
+  summarise(
+    mean_cover = mean(cover, na.rm = TRUE),
+    min_cover  = min(cover, na.rm = TRUE),
+    max_cover  = max(cover, na.rm = TRUE),
+    n_surveys  = n(),
+    .groups = "drop") %>%
+
+  left_join(baseline_means, by = "species") %>%
+  
+  mutate(
+    diff_abs = mean_cover - baseline_mean,
+    diff_pct = 100 * diff_abs / baseline_mean) %>%
+  
+  arrange(species, season))
+```
+
+
+Here we fit per-species GLMs for canopy cover by flying-fox abundance, mean temperature, season, and year. 
+
+```{r}
+# Prepare canopy cover modelling data
+canopy_mod <- canopy %>%
+  filter(period == "Baseline") %>%
+  mutate(
+    date      = as.Date(date),
+    year      = factor(year),
+    season    = factor(season, levels = c(
+      "Summer", "Autumn", "Winter", "Spring")),
+    mean_temp = as.numeric(mean_temp),
+    ff        = as.numeric(ff)) %>%
+  drop_na(cover, ff, mean_temp, season, year) %>%  
+  droplevels()
+
+# Fit GLM for canopy cover per species
+glm_results <- canopy_mod %>%
+  group_by(species) %>%
+  nest() %>%
+  
+  mutate(
+    model = map(
+      data,
+      ~ glm(
+        cover ~ ff + mean_temp + season + year,
+        data = .x,
+        family = gaussian())),
+    tidy = map(model, broom::tidy)) %>%
+  
+  select(species, tidy) %>%
+  unnest(tidy) %>%
+  filter(term != "(Intercept)") %>%
+  
+  transmute(
+    species,
+    fixed_effect = case_when(
+      term == "ff"                 ~ "Flying-fox abundance",
+      term == "mean_temp"          ~ "Mean temperature",
+      grepl("^season", term)       ~ "Season",
+      grepl("^year", term)         ~ "Year",
+      TRUE ~ term),
+    p_value = p.value) %>%
+  arrange(species, fixed_effect) %>%
+  
+  print(n = nrow(.))
+```
+
+### Smooth values
+
+```{r}
 # Define axis mapping
 FF_MAX     <- 9000
 CANOPY_MAX <- 100
 FF_PER_PC  <- FF_MAX / CANOPY_MAX
 
 # Smooth canopy min/max within species
-canopy_sm <- canopy_ff %>%
+canopy_sm <- canopy %>%
   group_by(species) %>%
   mutate(
     
@@ -1664,18 +1806,13 @@ canopy_sm <- canopy_ff %>%
   ungroup()
 ```
 
-### Statistics
-
-```{r}
-# Print statistics for canopy cover surveys
-nrow(canopy)
-min(canopy$date, na.rm = TRUE) # 2018-12-15
-max(canopy$date, na.rm = TRUE) # 2024-09-29
-```
-
 ### Plot
 
 ```{r}
+library(ggh4x) 
+
+margin <- ggplot2::margin
+
 # Plot and display ribbon for canopy cover
 (canopy_plot <- ggplot(
   canopy_sm,
@@ -1711,17 +1848,17 @@ max(canopy$date, na.rm = TRUE) # 2024-09-29
   # Configure axes
   scale_colour_manual(
   values = c(
-    "Broadleaves"      = brown,
-    "Needleleaves"     = green,
-    "Eucalypts" = orange,
-    "Laurels"   = lilac)) +
+    "Broadleaves"  = brown,
+    "Needleleaves" = green,
+    "Eucalypts"    = orange,
+    "Laurels"      = lilac)) +
   
   scale_fill_manual(
   values = c(
-    "Broadleaves"      = brown,
-    "Needleleaves"     = green,
-    "Eucalypts" = orange,
-    "Laurels"   = lilac)) +
+    "Broadleaves"  = brown,
+    "Needleleaves" = green,
+    "Eucalypts"    = orange,
+    "Laurels"      = lilac)) +
    
   # Configure x-axis
   scale_x_date(
@@ -1747,14 +1884,16 @@ max(canopy$date, na.rm = TRUE) # 2024-09-29
     axis.text.x        = element_text(vjust  = 1),
     axis.text.y        = element_text(vjust  = 0.5),
     axis.title.x       = element_blank(),
-    axis.title.y.left  = element_text(margin = margin(r = 12)),
-    axis.title.y.right = element_text(margin = margin(l = 12)), 
-    legend.position    = "none", 
+    axis.title.y.left  = element_text(margin = ggplot2::margin(r = 12)),
+    axis.title.y.right = element_text(margin = ggplot2::margin(l = 12)), 
+    legend.position    = "bottom", 
+    legend.text        = element_text(size   = 10),
+    legend.title       = element_blank(), 
     panel.background   = element_rect(colour = NA, fill = white),
     panel.border       = element_blank(),
     panel.grid.major   = element_blank(),
     panel.grid.minor   = element_blank(),
-    plot.margin        = margin(t = -0.01, r = 0, b = 0, l = 0.01, "cm"), 
+    plot.margin        = margin(t = -0.35, r = 0, b = -0.2, l = 0.01, "cm"), 
     strip.text         = element_text(
       face = "bold", margin = margin(t = 9), size = 11)))
 ```
@@ -1764,7 +1903,7 @@ max(canopy$date, na.rm = TRUE) # 2024-09-29
 ggsave(
   filename = "output/abundance by canopy cover.jpeg",
   plot     = canopy_plot, 
-  height   = 110, 
+  height   = 202, 
   width    = 180, 
   units    = "mm", 
   dpi      = 600)

@@ -75,6 +75,7 @@ pacman::p_load(
 # Ensure dplyr::select is active to avoid masking by other packages
 select <- dplyr::select
 recode <- dplyr::recode
+margin <- ggplot2::margin
 ```
 
 ## Set up `beepr`
