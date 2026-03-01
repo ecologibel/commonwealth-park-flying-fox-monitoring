@@ -19,204 +19,91 @@ knit: "(function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = 
 
 # **Background**
 
-This [R project](https://support.posit.co/hc/en-us/articles/200526207-Using-RStudio-Projects) presents the datasets and workflows used in the '*Hanging in there: the highs and lows of a flying-fox camp in a novel landscape*' project. For information, visit the [GitHub repo](https://github.com/ecologibel/commonwealth-park-flying-fox-monitoring). 
+This [R project](https://support.posit.co/hc/en-us/articles/200526207-Using-RStudio-Projects) presents the datasets and workflows used in the '[ABS Commonwealth Park flying-fox monitoring program](https://sites.google.com/view/absflyingfoxmonitoringact/) publication *Hanging in there: the highs and lows of a flying-fox camp in a novel landscape*'. For information, visit the [GitHub repo](https://github.com/ecologibel/commonwealth-park-flying-fox-monitoring). 
 
 # **Setup**
 
-## Set global options
+## Install and load packages
 
-```{r global-options, echo = FALSE}
-# Set default knitting options 
-knitr::opts_chunk$set(echo = TRUE, eval = TRUE)
+  1. Dependancies 
 
-# Set chunk behaviours (e.g., chunks with 'draft = TRUE' will not run)
-knit <- list(
-  # For one-off installation chunks (do not run)
-  init_once = list(eval = FALSE),
-  # For setup chunks (hide chunk and output)
-  setup     = list(echo = FALSE, message = FALSE, warning = FALSE), 
-  # For setup function chunks (show chunk but not output)
-  echo_only = list(echo = TRUE, message = FALSE, warning = FALSE),
-  # For function chunks (hide chunk but show output)
-  fun       = list(echo = FALSE), 
-  # For draft chunks (do not run)
-  draft     = list(eval = FALSE),
-  # For dynamic summary chunks (hide chunk but show inline results)
-  ds        = list(echo = FALSE, results = 'asis'),
-  # For plot chunks Plotting chunk (always run)
-  plot      = list(eval = TRUE),
-  # Set size defaults for printed figures
-  fig       = list(fig.height = 10, fig.width = 15),
-  # For ggsave chunks (always run) 
-  ggsave    = list(eval = TRUE)
-)
+The `ccl` package provides lab-specific functions used throughout this template, and `pacman` lets you install and load multiple packages at once. 
 
-# Define hook functions based on knit list
-knitr::opts_hooks$set(
-  
-  # Disable evaluation for `draft = TRUE` chunks
-  draft = function(options) {
-    if (isTRUE(options$draft)) {
-      options$eval <- FALSE}
-    options},
-  
-  # Apply predefined setup defaults to `setup = TRUE` chunks
-  setup = function(options) {
-    if (isTRUE(options$setup)) {
-      options <- knitr::merge_lists(options, knit$setup)}
-    options},
-  
-  # Show code only (hide results) for `echo_only = TRUE` chunks
-  echo_only = function(options) {
-    if (isTRUE(options$echo_only)) {
-      options <- knitr::merge_lists(options, knit$echo_only)
-      options$results <- "hide"}
-    options},
-  
-  # Apply predefined function defaults to `fun = TRUE` chunks
-  fun = function(options) {
-    if (isTRUE(options$fun)) {
-      options <- knitr::merge_lists(options, knit$fun)}
-    options})
+> Run this chunk once when setting up a new project. 
+
+```{r, eval = FALSE}
+# Install ccl package from GitHub (run once; skip if already installed)
+remotes::install_github("coexistence-conservation-lab/ccl")
 ```
 
-## Initialise project
+> Run this chunk every time you load the project. 
 
-To initialise your project, load the function below then run `run_setup()`. 
+```{r, message = FALSE, results = 'hide', warning = FALSE}
+# Update ccl package if a newer version is available
+remotes::update_packages("ccl")
 
-Depending on how many packages need installing, it may take a while. Feel free to have a look through `setup.Rmd` to become familiar with the setup. 
+# Load ccl package
+library(ccl)
 
-```{r, setup = TRUE}
-# Define setup function
-run_setup <- function(path = "setup.Rmd", total = 3) {
-  # Ensure `cli` is available, and install if not
-  if (!requireNamespace("cli", quietly = TRUE)) {
-    install.packages("cli")}
-  library(cli)
-  
-  # Initialise progress bar
-  cli_progress_bar("Initialising setup", total = total)
-
-  # Ensure knitr output directory is set 
-  if (is.null(knitr::opts_knit$get("output.dir"))) {
-    knitr::opts_knit$set(output.dir = getwd())}
-  cli_progress_update(set = 2)
-
-  # Branch behaviour depending on whether `knitr` is currently running
-  if (isTRUE(getOption("knitr.in.progress"))) {
-    # If knitting, include `setup.Rmd` inline (`knitr` handles options)
-    invisible(
-      knitr::knit_child(path, quiet = TRUE, envir = knitr::knit_global()))
-  } else {
-    
-    # If running interactively, evaluate chunks and selectively silence
-    run_rmd_chunks <- function(file, envir = globalenv()) {
-      
-      # Read file and locate chunk fences
-      lines  <- readLines(file, warn = FALSE)
-      starts <- grep("^```\\{r", lines)
-      ends   <- grep("^```\\s*$", lines)
-      
-      # Exit early if no R chunks are found
-      if (length(starts) == 0L) {return(invisible(NULL))}
-
-      # Pair each chunk start with the next closing fence after it
-      end_for_start <- vapply(
-        starts, function(s) {
-          e <- ends[ends > s][1]
-          if (is.na(e)) stop("Unclosed chunk fence in: ", file, call. = FALSE)
-          e}, integer(1))
-
-      # Iterate over chunks in file order
-      for (i in seq_along(starts)) {
-        s <- starts[[i]]
-        e <- end_for_start[[i]]
-
-        # Extract chunk header and body
-        header <- lines[[s]]
-        code   <- lines[(s + 1):(e - 1)]
-
-        # Parse chunk options using `knitr` parser
-        params_txt <- sub("^```\\{r\\s*", "", header)
-        params_txt <- sub("\\}\\s*$", "", params_txt)
-        opts       <- knitr:::parse_params(params_txt)
-
-        # # Respect `eval = FALSE`
-        eval_it <- if (!is.null(opts$eval)) isTRUE(opts$eval) else TRUE
-        if (!eval_it) next
-
-        # Resolve knitr-style output controls
-        include_it   <- if (!is.null(opts$include)) isTRUE(opts$include) else TRUE
-        results_hide <- identical(opts$results, "hide")
-        message_show <- if (!is.null(opts$message)) isTRUE(opts$message) else TRUE
-        warning_show <- if (!is.null(opts$warning)) isTRUE(opts$warning) else TRUE
-
-        # Silence `setup = TRUE` chunks
-        setup_quiet <- isTRUE(opts$setup)
-
-        # Decide whether printed output should be captured
-        capture_results <- setup_quiet || !include_it || results_hide
-
-        # Evaluate chunk with the requested suppression
-        expr     <- parse(text = paste(code, collapse = "\n"))
-        eval_one <- function() eval(expr, envir = envir)
-        wrapped  <- eval_one
-
-        # Suppress warnings when requested or for setup chunks
-        if (!warning_show || setup_quiet) {
-          wrapped <- local({f <- wrapped
-            function() suppressWarnings(f())})}
-
-        # Suppress messages when requested or for setup chunks
-        if (!message_show || setup_quiet) {
-          wrapped <- local({f <- wrapped
-            function() suppressMessages(f())})}
-
-        # Execute chunk, optionally capturing printed output
-        if (capture_results) {
-          invisible(capture.output(wrapped()))
-        } else {wrapped()}}
-      invisible(NULL)}
-    
-    # Execute chunk, optionally capturing printed output
-    run_rmd_chunks(path, envir = globalenv())}
-  
-  # Finalise progress bar and report status
-  cli_progress_update(set = 3)
-  cli_progress_done()
-  cli_alert_success("Setup successful!")}
+# Load pacman (manages package installation and loading in one step)
+library(pacman)
 ```
 
-```{r}
-# Run setup 
-run_setup()
-```
+  2. Project-specific packages 
 
-## Load project-specific packages
-
-This script installs and loads *project-specific* packages (*commonly used* packages are loaded in `setup.Rmd`). 
-
-```{r, results = 'hide', warning = FALSE, message = FALSE}
-# Install and load project-related packages
+```{r, message = FALSE, results = 'hide', warning = FALSE}
+# Install and load packages
 pacman::p_load(
-  # Data wrangling
-  broom, ggh4x, grid, hms, naniar, reshape2 
+  
+  # Data import and export 
+  openxlsx, readxl, writexl, yaml, 
+  
+  # Data wrangling 
+  broom, ggh4x, grid, hms, janitor, tidyverse, naniar, reshape2, 
+  
+  # Mapping 
+  ggmap, sf, 
+  
+  # Plotting 
+  corrplot, ggpubr, scales, viridis, viridisLite, 
+  
+  # Reporting 
+  english, kableExtra, rlang, rprojroot, 
+  
+  # Statistical modelling 
+  lme4, MuMIn, 
+  
+  # Utilities 
+  beepr, cli, crayon, glue, here
+
 ) 
+
+# Prevent other packages (e.g., cowplot) from masking dplyr functions
+select <- dplyr::select
+recode <- dplyr::recode
 ```
 
 ## Define resources
 
-This chunk tabulates the abbreviations used in our workflows.  
+### Abbreviations
+
+Prints a formatted table of abbreviations and key terms. 
 
 ```{r, draft = TRUE}
 # Read in abbrevations list and print it as a clean table
 (def <- print_clean_table(raw_data, sheet = "definitions"))
-
-# Read in factor labels and levels
-#get_labs()
 ```
 
-### Constants
+## Authorisations
+
+```{r}
+# Check and register Google Maps API key in metadata folder
+check_google_maps_api_key()
+```
+
+### Set constants
+
+Defines constant values. 
 
 #### Project
 
@@ -244,7 +131,7 @@ TREE_SCALE    <- 20
 FF_SCALE      <- 200
 
 # Define visual scaling factors for ENSO Niño3.4 values 
-ENSO_NEUT     <- 0.8
+ENSO_NEU     <- 0.8
 ENSO_ADJ      <- 4000
 ```
 
@@ -313,7 +200,7 @@ cat_labs <- c(
 
 ```{r}
 # Define and load project-specific colours as objects
-list2env(
+quiet(list2env(
   list(
     powder = "#CACBE8", 
     lilac  = "#6B6FD6", 
@@ -325,10 +212,10 @@ list2env(
     tan    = "#C4A487", 
     brown  = "#8B6B4F", 
     orange = "#D36C2A"), 
-  envir    = globalenv()) 
+  envir    = globalenv())) 
 ```
 
-### Functions
+### Build functions
 
 ```{r}
 # Define function to convert Excel times to hms
@@ -355,7 +242,7 @@ to_hms <- function(x) {
   hms::as_hms(readr::parse_time(x_chr, format = "%H:%M"))}
 ```
 
-# **Data preparation**
+# **Preparation**
 
 We entered the FF survey data in a [Microsoft Access](https://www.microsoft.com/en-au/microsoft-365/access) database. To put this into a form that we can use in this R markdown: 
 
@@ -385,7 +272,7 @@ dat <- read_excel(raw_data, sheet = "monitoring") %>%
     location == "Commonwealth Park") 
 ```
 
-# **Plots**
+# **Sections**
 
 ## Abundance and trees occupied
 
@@ -413,11 +300,12 @@ dat_wide <- dat %>%
     count          = as.numeric(count),
     trees_occupied = as.numeric(trees_occupied),
     date           = as.Date(date, format = c("%d/%m/%Y"))) %>%
-  mutate(year = year(date))
+  mutate(year      = year(date))
 
 # Subset to current reporting period
 dat_cur <- dat_wide %>%
   filter(date > REP_START & date < REP_END) %>%
+  
   # Include LRFFs if LRFFS_PRESENT = TRUE 
   filter(LRFFS_PRESENT | species != "lrff")
 
@@ -433,10 +321,10 @@ workbook <- export_sheet(dat_cur, sheet = "data")
   
   geom_ribbon(
     aes(
+      fill = "Trees occupied", 
       x    = date,
       ymin = 0,
-      ymax = trees_occupied * TREE_SCALE,
-      fill = "Trees occupied"),
+      ymax = trees_occupied * TREE_SCALE), 
     alpha  = 0.25,
     colour = NA,
     na.rm  = TRUE) +
@@ -450,10 +338,10 @@ workbook <- export_sheet(dat_cur, sheet = "data")
    
   geom_ribbon(
     aes(
+      fill = "Flying-foxes recorded", 
       x    = date,
       ymin = 0,
-      ymax = count,
-      fill = "Flying-foxes recorded"),
+      ymax = count),       ,
     alpha  = 0.25,
     colour = NA) +
    
@@ -497,7 +385,7 @@ workbook <- export_sheet(dat_cur, sheet = "data")
     axis.title.y      = element_text(vjust = 2, margin = margin(r = 1)),
     legend.position   = "bottom", 
     legend.title      = element_blank(), 
-    panel.background  = element_rect(fill = white, colour = NA), 
+    panel.background  = element_rect(fill = "white", colour = NA), 
     panel.grid        = element_blank(),
     plot.margin       = margin(t = 0.2, r = 0.5, b = -0.2, l = 0.1, "cm"), 
     plot.tag          = element_text(face = "bold", size = 12), 
@@ -549,7 +437,7 @@ workbook <- export_sheet(dat_cur, sheet = "data")
     date_labels = "%b") +
     
   scale_y_continuous(
-    sec.axis = sec_axis(~ ./TREE_SCALE, name = "Trees occupied")) + 
+    sec.axis    = sec_axis(~ ./TREE_SCALE, name = "Trees occupied")) + 
   
   theme_minimal() +
   theme(
@@ -561,7 +449,7 @@ workbook <- export_sheet(dat_cur, sheet = "data")
     legend.text       = element_text(size  = 8),
     legend.position   = "bottom", 
     legend.title      = element_blank(),
-    panel.background  = element_rect(fill = white, colour = NA), 
+    panel.background  = element_rect(fill = "white", colour = NA), 
     panel.border      = element_blank(),
     panel.grid.major  = element_blank(), 
     panel.grid.minor  = element_blank(), 
@@ -574,9 +462,9 @@ workbook <- export_sheet(dat_cur, sheet = "data")
 
 Bar graph with month on the x-axis and FF abundance on the y-axis, showing the following as separate bars with standard error bars: 
 
-  1. Mean (±SE) FFs recorded (primary axis ranging 0–6,000)
-  2. Mean (±SE) trees occupied (secondary axis ranging 0–140)
-  3. Mean (±SE) ratio of FFs-to-trees (secondary axis ranging 0–140)
+  1. **Mean (±SE) FFs recorded** (primary axis ranging 0–6,000)
+  2. **Mean (±SE) trees occupied** (secondary axis ranging 0–140)
+  3. **Mean (±SE) ratio of FFs-to-trees** (secondary axis ranging 0–140)
 
 For the purposes of plotting the mean number of trees occupied and tree-by-bat ratio on a secondary axis, we multiplied these values by 40, then reversed this before plotting.
 
@@ -789,7 +677,7 @@ dat_cur_stats <- dat_cur_stats %>%
     legend.position   = "bottom", 
     legend.text       = element_text(size = 8),
     legend.title      = element_blank(),
-    panel.background  = element_rect(colour = NA, fill = white), 
+    panel.background  = element_rect(colour = NA, fill = "white"), 
     panel.grid.major  = element_blank(), 
     panel.grid.minor  = element_blank(), 
     panel.border      = element_blank(),
@@ -884,8 +772,8 @@ dat_all <- dat %>%
 
   # Draw boxplot 
   geom_boxplot(
-    col           = white, 
-    fill          = white, 
+    col           = "white", 
+    fill          = "white", 
     lwd           = 0.5, 
     na.rm         = TRUE, 
     outlier.shape = NA,
@@ -921,7 +809,7 @@ dat_all <- dat %>%
   # Define median value point for boxplot
   stat_summary(
     col    = mono4, 
-    fill   = white, 
+    fill   = "white", 
     fun    = "median", 
     geom   = "point", 
     shape  = 21, 
@@ -938,7 +826,7 @@ dat_all <- dat %>%
     legend.position  = c(0.07, 0.7), 
     legend.text      = element_text(size = 8), 
     legend.title     = element_text(face = "bold", size = 8), 
-    panel.background = element_rect(fill = white, colour = NA), 
+    panel.background = element_rect(fill = "white", colour = NA), 
     panel.border     = element_blank(),
     panel.grid.major = element_blank(), 
     panel.grid.minor = element_blank(), 
@@ -1044,7 +932,7 @@ quiet((survey_weather_plot <- ggplot() +
       xmax      = as.Date(REP_END),
       xmin      = as.Date(ALL_START),
       ymax      = (max(enso$nino_3_4) * 800) - ENSO_ADJ,
-      ymin      = (ENSO_NEUT          * 800) - ENSO_ADJ),
+      ymin      = (ENSO_NEU           * 800) - ENSO_ADJ),
     alpha       = 0.12,
     fill        = vir1, 
     inherit.aes = FALSE) +  
@@ -1054,8 +942,8 @@ quiet((survey_weather_plot <- ggplot() +
     aes(
       xmax      = as.Date(REP_END),
       xmin      = as.Date(ALL_START),
-      ymax      = ( ENSO_NEUT * 800) - ENSO_ADJ,
-      ymin      = (-ENSO_NEUT * 800) - ENSO_ADJ),
+      ymax      = ( ENSO_NEU * 800) - ENSO_ADJ,
+      ymin      = (-ENSO_NEU * 800) - ENSO_ADJ),
     alpha       = 0.12,
     fill        = vir7, 
     inherit.aes = FALSE) +  
@@ -1065,7 +953,7 @@ quiet((survey_weather_plot <- ggplot() +
     aes(
       xmax      = as.Date(REP_END),
       xmin      = as.Date(ALL_START),
-      ymax      = (-ENSO_NEUT         * 800) - ENSO_ADJ,
+      ymax      = (-ENSO_NEU          * 800) - ENSO_ADJ,
       ymin      = (min(enso$nino_3_4) * 800) - ENSO_ADJ),
     alpha       = 0.12,
     fill        = vir14, 
@@ -1115,7 +1003,7 @@ quiet((survey_weather_plot <- ggplot() +
     legend.position    = "bottom", 
     legend.text        = element_text(size   = 8),
     legend.title       = element_text(margin = margin(b = 12)), 
-    panel.background   = element_rect(colour = NA, fill = white),
+    panel.background   = element_rect(colour = NA, fill = "white"),
     panel.border       = element_blank(),
     panel.grid.major   = element_blank(),
     panel.grid.minor   = element_blank(),
@@ -1281,10 +1169,10 @@ density_map <- ggmap(map) +
     legend.text      = element_text(size = 8),
     legend.title     = element_text(size = 10), 
     panel.grid       = element_blank(),
-    panel.background = element_rect(fill = white, colour = NA), 
+    panel.background = element_rect(fill = "white", colour = NA), 
     plot.margin      = margin(t = -10, r = 4, b = 5, l = 5), 
     strip.background = element_rect(fill   = purple),
-    strip.text       = element_text(colour = white))
+    strip.text       = element_text(colour = "white"))
 
 # Display map
 # print(density_map)
@@ -1362,7 +1250,7 @@ occ <- read_excel(raw_data, sheet = "occupation") %>%
       x = as.Date(format(peak_date, "2012-%m-%d")), 
       y = year_sec), 
     alpha  = 0.6, 
-    color  = white, 
+    color  = "white", 
     shape  = 21, 
     size   = 5, 
     stroke = 1.2) +
@@ -1419,7 +1307,7 @@ occ <- read_excel(raw_data, sheet = "occupation") %>%
     legend.position    = "none", 
     legend.text        = element_text(size = 8),
     legend.title       = element_blank(), 
-    panel.background   = element_rect(fill = white, colour = NA), 
+    panel.background   = element_rect(fill = "white", colour = NA), 
     panel.grid         = element_blank(),
     plot.margin        = margin(t = 0, r = 0, b = 0, l = 0)))
 ```
@@ -1429,8 +1317,8 @@ occ <- read_excel(raw_data, sheet = "occupation") %>%
 ggsave(
   filename = "output/seasonal occupation.jpeg",
   plot     = occ_plot, 
-  height   = 4000, 
-  width    = 6000, 
+  height   = 4200, 
+  width    = 5500, 
   units    = "px", 
   dpi      = 800)
 ```
@@ -1512,7 +1400,7 @@ cat_plots <- dat_cat %>%
         legend.position  = "bottom",
         legend.text      = element_text(size   = 9),
         legend.title     = element_blank(),
-        panel.background = element_rect(colour = NA, fill = white),
+        panel.background = element_rect(colour = NA, fill = "white"),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.border     = element_blank(),
@@ -1689,7 +1577,7 @@ max(canopy$date, na.rm = TRUE) # 2024-09-29
 
 > 🚩 *Draft until tree-by-tree data for 2025 reporting period is available*.
 
-```{r, draft= TRUE}
+```{r, eval = FALSE}
 # Calculate seasonal reporting-period statistics
 (seasonal_reporting <- canopy %>%
   filter(period == "Reporting") %>%
@@ -1697,8 +1585,8 @@ max(canopy$date, na.rm = TRUE) # 2024-09-29
   
   summarise(
     mean_cover = mean(cover, na.rm = TRUE),
-    min_cover  = min(cover, na.rm = TRUE),
-    max_cover  = max(cover, na.rm = TRUE),
+    min_cover  = min( cover, na.rm = TRUE),
+    max_cover  = max( cover, na.rm = TRUE),
     n_surveys  = n(),
     .groups = "drop") %>%
 
@@ -1710,7 +1598,6 @@ max(canopy$date, na.rm = TRUE) # 2024-09-29
   
   arrange(species, season))
 ```
-
 
 Here we fit per-species GLMs for canopy cover by flying-fox abundance, mean temperature, season, and year. 
 
@@ -1809,8 +1696,7 @@ canopy_sm <- canopy %>%
 ### Plot
 
 ```{r}
-library(ggh4x) 
-
+# Define margin() namespace
 margin <- ggplot2::margin
 
 # Plot and display ribbon for canopy cover
@@ -1869,7 +1755,7 @@ margin <- ggplot2::margin
   scale_y_continuous(
     limits   = c(0, FF_MAX),
     breaks   = seq(0, FF_MAX, 2000),
-    name     = "Flying-fox abundance",
+    name     = "Estimated flying-fox abundance",
     
     # Configure secondary y-axis
     sec.axis = sec_axis(
@@ -1889,11 +1775,12 @@ margin <- ggplot2::margin
     legend.position    = "bottom", 
     legend.text        = element_text(size   = 10),
     legend.title       = element_blank(), 
-    panel.background   = element_rect(colour = NA, fill = white),
+    panel.background   = element_rect(colour = NA, fill = "white"),
     panel.border       = element_blank(),
-    panel.grid.major   = element_blank(),
-    panel.grid.minor   = element_blank(),
-    plot.margin        = margin(t = -0.35, r = 0, b = -0.2, l = 0.01, "cm"), 
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.x = element_blank(), 
+    panel.grid.minor.y = element_blank(),
+    plot.margin        = margin(t = -0.35, r = 0.05, b = -0.2, l = 0.01, "cm"),
     strip.text         = element_text(
       face = "bold", margin = margin(t = 9), size = 11)))
 ```
@@ -1903,7 +1790,7 @@ margin <- ggplot2::margin
 ggsave(
   filename = "output/abundance by canopy cover.jpeg",
   plot     = canopy_plot, 
-  height   = 202, 
+  height   = 175, 
   width    = 180, 
   units    = "mm", 
   dpi      = 600)
